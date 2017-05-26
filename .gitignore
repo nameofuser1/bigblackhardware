@@ -1,0 +1,7 @@
+gcc/exe/*
+gcc/obj/*
+*.o
+*.bin
+
+*.cbp
+*.layout
