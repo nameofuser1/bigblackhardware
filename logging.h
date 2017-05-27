@@ -2,7 +2,8 @@
 #define LOGGING_H
 
 #include <stdlib.h>
-#include <osi.h>
+#include "osi.h"
+#include "uart_if.h"
 
 OsiLockObj_t print_lock;
 
@@ -43,7 +44,7 @@ void logging_init(void);
                 if(error_code < 0) \
                 {\
                     SYNCRONIZED_ERR_PRINT(error_code);\
-                    osi_TaskDelete(&hdnl);\
+                    osi_TaskDelete(&hndl);\
                 }\
             }
 
