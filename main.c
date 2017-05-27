@@ -241,6 +241,45 @@ void vTestTask1( void *pvParameters )
 }
 
 
+static WlanConfig *config;
+static OsiTaskHandle init_handle;
+
+/* **************************************************
+ *                 Initialization task              *
+ ****************************************************
+ *                                                  *
+ *   Configures WLAN module and load all necessary  *
+ *      middleware drivers                          *
+ *                                                  *
+ * ************************************************ */
+ static void vInitializationTask(void *pvParameters) {
+    /* Set WLAN configuration */
+    config = mem_Malloc(sizeof *config);
+    mem_set(config, '0', sizeof *config);
+
+    config->mode = CONFIG_STA;
+
+    config->ssid_len = strlen(SSID_NAME);
+    mem_copy(config->ssid, SSID_NAME, config->ssid_len);
+
+    config->pwd_len = strlen(SSID_PWD);
+    mem_copy(config->pwd, SSID_PWD, config->pwd_len);
+
+    config->sec = CONFIG_WPA_WPA2;
+
+    OSI_COMMON_LOG("WLAN INIT\r\n");
+
+    /* Starting WLAN */
+    wlan_init();
+    wlan_start(config);
+
+    osi_TaskDelete(&init_handle);
+}
+
+
+
+
+
 //*****************************************************************************
 //
 //! Application startup display on UART
@@ -327,32 +366,15 @@ int main( void )
     //
     DisplayBanner(APP_NAME);
 
-    VStartSimpleLinkSpawnTask(SPAWN_TASK_PRIORITY);
-
     /* Initialize logging module */
     logging_init();
+
+    VStartSimpleLinkSpawnTask(SPAWN_TASK_PRIORITY);
 
     osi_TaskCreate( vTestTask1, "TASK1",\
     							OSI_STACK_SIZE, NULL, 1, NULL );
 
-
-    WlanConfig *config;
-    config = mem_Malloc(sizeof *config);
-    mem_set(config, '0', sizeof *config);
-
-    config->mode = CONFIG_STA;
-
-    config->ssid_len = strlen(SSID_NAME);
-    mem_copy(config->ssid, SSID_NAME, config->ssid_len);
-
-    config->pwd_len = strlen(SSID_PWD);
-    mem_copy(config->pwd, SSID_PWD, config->pwd_len);
-
-    config->sec = CONFIG_WPA_WPA2;
-
-    UART_PRINT("WLAN INIT\r\n");
-    wlan_init();
-    wlan_start(config);
+    osi_TaskCreate(vInitializationTask, "InitTask", OSI_STACK_SIZE, NULL, 2, &init_handle);
 
     osi_start();
 
