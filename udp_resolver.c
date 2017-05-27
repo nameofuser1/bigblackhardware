@@ -8,6 +8,9 @@
 #include "socket.h"
 #include "logging.h"
 
+#include "common.h"
+
+
 /* OSI task stack size */
 #define UDP_STACK_SIZE  1024
 
@@ -20,30 +23,30 @@
 
 /* Static variables */
 static OsiTaskHandle    udp_handle;
-static i16              listen_sock = -1;
+static _i16              listen_sock = -1;
 
 
-static bool check_for_resolve(u8 *buf, u16 size) {
+static bool check_for_resolve(_u8 *buf, _u16 size) {
     return true;
 }
 
 
-static bool cmp_keys(u8 *buf, u8 *key) {
+static bool cmp_keys(_u8 *buf, _u8 *key) {
 }
 
 
 static void udp_resolver_task(void *pvParams) {
     int status;
-    u8 buffer[UDP_BUFFER_SIZE];
-    u8 answer[ANSWER_PACKET_SIZE];
+    _u8 buffer[UDP_BUFFER_SIZE];
+    _u8 answer[ANSWER_PACKET_SIZE];
     sockaddr_in sock_local_addr;
     sockaddr_in sock_remote_addr;
     int sock_addr_size;
     UdpResolverCfg *cfg = pvParams;
 
     sock_local_addr.sin_family = AF_INET;
-    sock_local_addr.sin_addr = 0x00;
-    sock_local_addr.sin_port = sl_Htons((u16)cfg->port);
+    sock_local_addr.sin_addr.s_addr = 0x00;
+    sock_local_addr.sin_port = sl_Htons((_u16)cfg->port);
 
     sock_addr_size = sizeof(SlSockAddrIn_t);
 
@@ -59,7 +62,7 @@ static void udp_resolver_task(void *pvParams) {
 
     for( ;; ) {
         status = recvfrom(listen_sock, buffer, RESOLVE_PACKET_SIZE, 0,
-                          (sockaddr*)&sock_remote_addr, &sock_addr_size);
+                          (sockaddr*)&sock_remote_addr, (SlSocklen_t*)&sock_addr_size);
 
         if(status < 0) {
             goto err_exit;
@@ -92,8 +95,8 @@ _u8 udp_resolver_start(UdpResolverCfg _cfg) {
     strcpy(cfg.key, _cfg.key);
     cfg.port = _cfg.port;
 
-    port = _port;
-    status = osi_TaskCreate(udp_resolver_start, "udp_resolver_task", UDP_STACK_SIZE, &cfg, 1, &udp_handle);
+    status = osi_TaskCreate(udp_resolver_task, "udp_resolver_task", UDP_STACK_SIZE,
+                            &cfg, 1, &udp_handle);
     OSI_ASSERT_ON_ERROR(status);
 }
 
