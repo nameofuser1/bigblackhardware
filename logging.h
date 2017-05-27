@@ -38,6 +38,16 @@ void logging_init(void);
             }
 
 
+#define OSI_ASSERT_WITH_EXIT(error_code, hndl)\
+            {\
+                if(error_code < 0) \
+                {\
+                    SYNCRONIZED_ERR_PRINT(error_code);\
+                    osi_TaskDelete(&hdnl);\
+                }\
+            }
+
+
 #define OSI_ASSERT_WITHOUT_EXIT(error_code)\
             {\
                 if(error_code < 0) \
