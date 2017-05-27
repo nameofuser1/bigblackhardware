@@ -126,6 +126,7 @@ ${BINDIR}/$(PROJ_NAME).axf: ${OBJDIR}/main.o
 ${BINDIR}/$(PROJ_NAME).axf: ${OBJDIR}/pinmux.o
 ${BINDIR}/$(PROJ_NAME).axf: ${OBJDIR}/wlan_config.o
 ${BINDIR}/$(PROJ_NAME).axf: ${OBJDIR}/logging.o
+${BINDIR}/$(PROJ_NAME).axf: ${OBJDIR}/udp_resolver.o
 
 # Common drivers
 ${BINDIR}/$(PROJ_NAME).axf: ${OBJDIR}/gpio_if.o
