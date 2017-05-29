@@ -94,6 +94,7 @@
 #include "pinmux.h"
 
 #include "wlan_config.h"
+#include "udp_resolver.h"
 #include "logging.h"
 //*****************************************************************************
 //                      MACRO DEFINITIONS
@@ -111,6 +112,9 @@
 
 #define SSID_NAME               "ChtoZaSet"
 #define SSID_PWD                "GrEs4242SeRg"
+
+#define UDP_RESOLVER_PORT       1094
+#define DEFAULT_DEVICE_KEY      "00000000000000000000000000000000"
 
 //*****************************************************************************
 //                 GLOBAL VARIABLES -- Start
@@ -231,7 +235,7 @@ void vTestTask1( void *pvParameters )
     {
 		OSI_COMMON_LOG("Hey you\r\n");
 
-		if(wlan_connected() && !stopped) {
+		if((wlan_status() != WLAN_CONNECTED) && !stopped) {
             OSI_COMMON_LOG("Connected to WLAN. Now Stopping.\r\n");
             stopped = 1;
             wlan_stop();
@@ -253,6 +257,9 @@ static OsiTaskHandle init_handle;
  *                                                  *
  * ************************************************ */
  static void vInitializationTask(void *pvParameters) {
+     int status;
+     int wlan_connecting_time;
+
     /* Set WLAN configuration */
     config = mem_Malloc(sizeof *config);
     mem_set(config, '0', sizeof *config);
@@ -267,12 +274,41 @@ static OsiTaskHandle init_handle;
 
     config->sec = CONFIG_WPA_WPA2;
 
-    OSI_COMMON_LOG("WLAN INIT\r\n");
+    OSI_COMMON_LOG("WLAN initialization\r\n");
 
     /* Starting WLAN */
-    wlan_init();
-    wlan_start(config);
+    OSI_COMMON_LOG("wlan_init before call\r\n");
+    status = wlan_init();
+    OSI_COMMON_LOG("wlan_init called\r\n");
+    OSI_ASSERT_WITH_EXIT(status, init_handle);
 
+    OSI_COMMON_LOG("wlan_start before call\r\n");
+    status = wlan_start(config);
+    OSI_COMMON_LOG("wlan_start called\r\n");
+    OSI_ASSERT_WITH_EXIT(status, init_handle);
+
+    OSI_COMMON_LOG("Waiting for WLAN to be connected\r\n");
+    WlanStatus wl_status;
+    while((wl_status = wlan_status()) != WLAN_CONNECTED) {
+        if(wl_status != WLAN_CONNECTING) {
+            OSI_COMMON_LOG("Failed to initialize WLAN module\r\n");
+            goto init_exit;
+        }
+
+        osi_Sleep(1000);
+    }
+
+    OSI_COMMON_LOG("UDP resolver initialization\r\n");
+
+    /* Configure and start UDP resolver */
+    UdpResolverCfg cfg;
+    cfg.key = DEFAULT_DEVICE_KEY;
+    cfg.port = UDP_RESOLVER_PORT;
+
+    status = udp_resolver_start(&cfg);
+    OSI_ASSERT_WITH_EXIT(status, init_handle);
+
+init_exit:
     osi_TaskDelete(&init_handle);
 }
 
@@ -371,7 +407,7 @@ int main( void )
 
     VStartSimpleLinkSpawnTask(SPAWN_TASK_PRIORITY);
 
-    osi_TaskCreate( vTestTask1, "TASK1",\
+    //osi_TaskCreate( vTestTask1, "TASK1",\
     							OSI_STACK_SIZE, NULL, 1, NULL );
 
     osi_TaskCreate(vInitializationTask, "InitTask", OSI_STACK_SIZE, NULL, 2, &init_handle);
