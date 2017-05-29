@@ -25,10 +25,13 @@ typedef struct _wlan_config {
 } WlanConfig;
 
 
-_u8 wlan_init(void);
-_u8 wlan_start(WlanConfig *config);
-_u8 wlan_stop(void);
-bool wlan_connected(void);
+typedef enum {WLAN_READY = 0, WLAN_CONNECTING, WLAN_CONNECTED} WlanStatus;
+
+
+_u8         wlan_init(void);
+_u8         wlan_start(WlanConfig *config);
+_u8         wlan_stop(void);
+WlanStatus  wlan_status(void);
 
 
 #endif // WLAN_CONFIG_H

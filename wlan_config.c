@@ -14,7 +14,10 @@
 #include "logging.h"
 
 
-#define WLAN_STACK_SIZE 1024
+#define WLAN_STACK_SIZE         1024
+
+/* Time to connect to a wireless network in seconds */
+#define MAX_CONNECTING_TIME     10
 
 
 //SimpleLink Status
@@ -28,6 +31,9 @@ static OsiTaskHandle stop_handle;
 
 //Lock object to prevent simultaneous connecting/disconnecting
 static OsiLockObj_t start_stop_lock;
+
+//Status
+static WlanStatus wl_status = WLAN_READY;
 
 
 static _u8 sl_sec_types[3] = {[CONFIG_OPEN] = SL_SEC_TYPE_OPEN,
@@ -59,6 +65,7 @@ static bool configure_ap(WlanConfig *config) {
 
 static int configure_sta(WlanConfig *config) {
     int status;
+    int connecting_time;
     SlSecParams_t sec_params;
     void *sec_params_ptr;
 
@@ -85,16 +92,25 @@ static int configure_sta(WlanConfig *config) {
     OSI_ASSERT_ON_ERROR(status);
 
     // Wait for WLAN Event
+    connecting_time = 0;
     while((!IS_CONNECTED(g_ulStatus)) || (!IS_IP_ACQUIRED(g_ulStatus)))
     {
         // Toggle LEDs to Indicate Connection Progress
         GPIO_IF_LedOff(MCU_IP_ALLOC_IND);
-        MAP_UtilsDelay(800000);
+        MAP_UtilsDelay(8000000);
         GPIO_IF_LedOn(MCU_IP_ALLOC_IND);
-        MAP_UtilsDelay(800000);
+        MAP_UtilsDelay(8000000);
+
+        if(++connecting_time == MAX_CONNECTING_TIME) {
+            sl_WlanDisconnect();
+            sl_Stop(SL_STOP_TIMEOUT);
+
+            OSI_COMMON_LOG("WLAN connection timeout has expired\r\n");
+            return FAILURE;
+        }
     }
 
-    return true;
+    return SUCCESS;
 }
 
 
@@ -102,12 +118,16 @@ static void wlan_start_task(void *config) {
     int status;
     WlanConfig *wlan_cfg = config;
 
-    // Lock to avoid simultaneous start and stop of SIMPLELINK device
-    osi_LockObjLock(&start_stop_lock, 0);
     OSI_COMMON_LOG("Starting WLAN\r\n");
 
     status = sl_Start(NULL, NULL, NULL);
-    OSI_ASSERT_WITHOUT_EXIT(status);
+
+    if(status < 0) {
+        OSI_ASSERT_WITHOUT_EXIT(status);
+        wl_status = WLAN_READY;
+
+        goto start_exit;
+    }
 
     if(wlan_cfg->mode == CONFIG_AP) {
         OSI_COMMON_LOG("AP mode\r\n");
@@ -118,8 +138,15 @@ static void wlan_start_task(void *config) {
         status = configure_sta(wlan_cfg);
     }
 
-    OSI_ASSERT_WITHOUT_EXIT(status);
+    if(status < 0) {
+        wl_status = WLAN_READY;
+        OSI_ASSERT_WITHOUT_EXIT(status);
+    }
+    else {
+        wl_status = WLAN_CONNECTED;
+    }
 
+start_exit:
     // Unlock mutex
     osi_LockObjUnlock(&start_stop_lock);
     osi_TaskDelete(&start_handle);
@@ -130,16 +157,15 @@ static void wlan_stop_task(void *params) {
     (void)params;
     int status;
 
-    // Lock to avoid simultaneous start and stop of SIMPLELINK device
-    osi_LockObjLock(&start_stop_lock, 0);
     OSI_COMMON_LOG("Stopping WLAN\r\n");
 
     status = sl_Stop(SL_STOP_TIMEOUT);
     OSI_ASSERT_WITHOUT_EXIT(status);
 
-    // Unlock mutex
-    OSI_COMMON_LOG("Stopped WLAN\r\n");
+    /* Update WLAN status and unlock mutex*/
+    wl_status = WLAN_READY;
     osi_LockObjUnlock(&start_stop_lock);
+
     osi_TaskDelete(&stop_handle);
 }
 
@@ -149,25 +175,44 @@ _u8 wlan_init(void) {
 
     status = osi_LockObjCreate(&start_stop_lock);
     OSI_ASSERT_ON_ERROR(status);
+
+    return SUCCESS;
 }
 
 
 _u8 wlan_start(WlanConfig *config) {
     int status;
 
+    OSI_COMMON_LOG("wlan_start\r\n");
+    /* Lock to avoid simultaneous start and stop of SIMPLELINK device */
+    /* Will be unlocked at the end of wlan_start_task */
+    osi_LockObjLock(&start_stop_lock, 0);
+    OSI_COMMON_LOG("Locked object\r\n");
+
+    wl_status = WLAN_CONNECTING;
+
     status = osi_TaskCreate(wlan_start_task, "wlan_start_task", WLAN_STACK_SIZE, config, 1, &start_handle);
+    OSI_COMMON_LOG("Created task\r\n");
     OSI_ASSERT_ON_ERROR(status);
+
+    return SUCCESS;
 }
 
 
 _u8 wlan_stop(void) {
     int status;
 
+    /* Lock to avoid simultaneous start and stop of SIMPLELINK device */
+    /* Will be unlocked at the end of wlan_stop_task */
+    osi_LockObjLock(&start_stop_lock, 0);
+
     status = osi_TaskCreate(wlan_stop_task, "wlan_stop_task", WLAN_STACK_SIZE, NULL, 1, &stop_handle);
     OSI_ASSERT_ON_ERROR(status);
+
+    return SUCCESS;
 }
 
 
-bool wlan_connected(void) {
-    return IS_CONNECTED(g_ulStatus);
+WlanStatus wlan_status(void) {
+    return wl_status;
 }
