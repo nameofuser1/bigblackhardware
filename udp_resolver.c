@@ -82,7 +82,7 @@ static void udp_resolver_task(void *pvParams) {
 
     sock_addr_size = sizeof(SlSockAddrIn_t);
 
-    /* Create listen sock an UDP socket */
+    /* Create an UDP socket */
     listen_sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
     OSI_ASSERT_WITH_EXIT(listen_sock, udp_handle);
 
