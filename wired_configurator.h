@@ -1,0 +1,8 @@
+#ifndef WIRED_CONFIGURATOR_H_INCLUDED
+#define WIRED_CONFIGURATOR_H_INCLUDED
+
+
+void wired_conf_start(void);
+
+
+#endif // WIRED_CONFIGURATOR_H_INCLUDED
