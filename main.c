@@ -97,6 +97,7 @@
 
 #include "wlan_config.h"
 #include "udp_resolver.h"
+#include "wired_configurator.h"
 #include "logging.h"
 //*****************************************************************************
 //                      MACRO DEFINITIONS
@@ -139,7 +140,6 @@ extern uVectorEntry __vector_table;
 //*****************************************************************************
 //                      LOCAL FUNCTION DEFINITIONS
 //*****************************************************************************
-static void vTestTask1( void *pvParameters );
 static void BoardInit();
 
 
@@ -219,27 +219,12 @@ void vApplicationStackOverflowHook( OsiTaskHandle *pxTask,
 #endif //USE_FREERTOS
 
 
-typedef enum {CONN_UART, CONN_PROGRAMMER} ConnectionType;
-
-typedef struct _connection_info {
-
-    _i16            hndl;
-    ConnectionType  type;
-
-    OsiMsgQ_t       in_queue;
-    OsiMsgQ_t       out_queue;
-
-} ConnectionInfo;
-
 
 #define DATA_BUFFER_SIZE    1024
 #define PACKET_HEADER_SIZE  3
 
 /* Connections are passed through this queue from listening task to reading task */
 static OsiMsgQ_t    connections_queue;
-
-
-
 
 
 /* **************************************************
@@ -256,7 +241,9 @@ static OsiMsgQ_t    connections_queue;
  /* 1 for programmer, 1 for UART */
  #define TCP_CONNECTION_NUM     2
 
- static void vListeningTask(void *pvParameters) {
+ static OsiTaskHandle accept_task_hndl;
+
+ static void vAcceptingTask(void *pvParameters) {
     _i8 status;
     _i16 listen_sock;
     sockaddr_in local_addr;
@@ -269,10 +256,10 @@ static OsiMsgQ_t    connections_queue;
     listen_sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 
     status = bind(listen_sock, (sockaddr*)&local_addr, sizeof local_addr);
-    OSI_ASSERT_WITH_EXIT(status);
+    OSI_ASSERT_WITH_EXIT(status, accept_task_hndl);
 
     status = listen(listen_sock, TCP_CONNECTION_NUM);
-    OSI_ASSERT_WITH_EXIT(status);
+    OSI_ASSERT_WITH_EXIT(status, accept_task_hndl);
 
     for( ;; ) {
         _i16 conn = accept(listen_sock, (sockaddr*)&remote_addr, &remote_addr_l);
@@ -289,8 +276,22 @@ static OsiMsgQ_t    connections_queue;
  }
 
 /* Global variables for initialization task*/
-static WlanConfig *config;
 static OsiTaskHandle init_handle;
+
+
+/* Setting up default WLAN config in the absence of saved one */
+static void get_default_config(WlanConfig *config) {
+    config->mode = WLAN_CONFIG_STA;
+
+    config->ssid_len = strlen(SSID_NAME);
+    mem_copy(config->ssid, SSID_NAME, config->ssid_len);
+
+    config->pwd_len = strlen(SSID_PWD);
+    mem_copy(config->pwd, SSID_PWD, config->pwd_len);
+
+    config->sec = WLAN_CONFIG_WPA_WPA2;
+}
+
 
 /* **************************************************
  *                 Initialization task              *
@@ -300,40 +301,35 @@ static OsiTaskHandle init_handle;
  *      middleware drivers                          *
  *                                                  *
  * ************************************************ */
- static void vInitializationTask(void *pvParameters) {
-     int status;
-     int wlan_connecting_time;
+static void vInitializationTask(void *pvParameters) {
+    int status;
+    WlanConfig   config;
+    int wlan_connecting_time;
 
-    /* Set WLAN configuration */
-    config = mem_Malloc(sizeof *config);
-    mem_set(config, '0', sizeof *config);
-
-    config->mode = CONFIG_STA;
-
-    config->ssid_len = strlen(SSID_NAME);
-    mem_copy(config->ssid, SSID_NAME, config->ssid_len);
-
-    config->pwd_len = strlen(SSID_PWD);
-    mem_copy(config->pwd, SSID_PWD, config->pwd_len);
-
-    config->sec = CONFIG_WPA_WPA2;
-
-    OSI_COMMON_LOG("WLAN initialization\r\n");
-
-    /* Starting WLAN */
-    OSI_COMMON_LOG("wlan_init before call\r\n");
+    /* Initializing WLAN module first in order to enable simplelink */
     status = wlan_init();
-    OSI_COMMON_LOG("wlan_init called\r\n");
     OSI_ASSERT_WITH_EXIT(status, init_handle);
 
-    OSI_COMMON_LOG("wlan_start before call\r\n");
-    status = wlan_start(config);
-    OSI_COMMON_LOG("wlan_start called\r\n");
+    /* Starting WIRED configuration listener */
+    wired_conf_start();
+
+    /* Set up WLAN configuration */
+    mem_set(&config, 0, sizeof config);
+    if(wlan_load_config(&config) != SUCCESS) {
+        OSI_COMMON_LOG("Failed to load config. Initializing with default one.\r\n");
+        get_default_config(&config);
+    }
+
+    wlan_print_config(&config);
+
+    status = wlan_start(&config);
     OSI_ASSERT_WITH_EXIT(status, init_handle);
 
     OSI_COMMON_LOG("Waiting for WLAN to be connected\r\n");
+    /* Waiting for connection */
     WlanStatus wl_status;
     while((wl_status = wlan_status()) != WLAN_CONNECTED) {
+        /* Check whether error occurred whilst connecting */
         if(wl_status != WLAN_CONNECTING) {
             OSI_COMMON_LOG("Failed to initialize WLAN module\r\n");
             goto init_exit;
@@ -352,13 +348,10 @@ static OsiTaskHandle init_handle;
     status = udp_resolver_start(&cfg);
     OSI_ASSERT_WITH_EXIT(status, init_handle);
 
+
 init_exit:
     osi_TaskDelete(&init_handle);
 }
-
-
-
-
 
 //*****************************************************************************
 //
