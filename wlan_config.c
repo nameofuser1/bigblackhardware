@@ -19,13 +19,17 @@
 /* Time to connect to a wireless network in seconds */
 #define MAX_CONNECTING_TIME     10
 
+/* Filename to save WLAN configuration into */
+#define CONFIG_FNAME            "wlan_config.bin"
+#define CONFIG_FILE_MSIZE       256
 
-//SimpleLink Status
+//SimpleLink WLAN connection Status
 extern unsigned long  g_ulStatus;
 
 //If error occurred while executing task
 static bool wlan_error = false;
 
+/* Handles for start and stop task */
 static OsiTaskHandle start_handle;
 static OsiTaskHandle stop_handle;
 
@@ -35,10 +39,14 @@ static OsiLockObj_t start_stop_lock;
 //Status
 static WlanStatus wl_status = WLAN_READY;
 
+/* Configuration security mappings */
+static _u8 sl_sec_types[3] = {[WLAN_CONFIG_OPEN] = SL_SEC_TYPE_OPEN,
+                              [WLAN_CONFIG_WEP] = SL_SEC_TYPE_WEP,
+                              [WLAN_CONFIG_WPA_WPA2] = SL_SEC_TYPE_WPA_WPA2};
 
-static _u8 sl_sec_types[3] = {[CONFIG_OPEN] = SL_SEC_TYPE_OPEN,
-                              [CONFIG_WEP] = SL_SEC_TYPE_WEP,
-                              [CONFIG_WPA_WPA2] = SL_SEC_TYPE_WPA_WPA2};
+
+/* Currently used configuration */
+static WlanConfig current_config;
 
 
 static bool configure_ap(WlanConfig *config) {
@@ -76,7 +84,7 @@ static int configure_sta(WlanConfig *config) {
     OSI_ASSERT_ON_ERROR(status);
     sl_Start(0, 0, 0);
 
-    if(config->sec == CONFIG_OPEN) {
+    if(config->sec == WLAN_CONFIG_OPEN) {
         sec_params_ptr = NULL;
     }
     else {
@@ -116,11 +124,12 @@ static int configure_sta(WlanConfig *config) {
 
 static void wlan_start_task(void *config) {
     int status;
-    WlanConfig *wlan_cfg = config;
-
+    WlanConfig *wlan_config = config;
     OSI_COMMON_LOG("Starting WLAN\r\n");
 
-    status = sl_Start(NULL, NULL, NULL);
+    mem_copy(&current_config, config, sizeof *config);
+    sl_Stop(SL_STOP_TIMEOUT);   // Q: Do we really need it ?
+    status = sl_Start(NULL, NULL, 0); //Q: And this?
 
     if(status < 0) {
         OSI_ASSERT_WITHOUT_EXIT(status);
@@ -129,13 +138,13 @@ static void wlan_start_task(void *config) {
         goto start_exit;
     }
 
-    if(wlan_cfg->mode == CONFIG_AP) {
+    if(wlan_config->mode == WLAN_CONFIG_AP) {
         OSI_COMMON_LOG("AP mode\r\n");
-        status = configure_ap(wlan_cfg);
+        status = configure_ap(config);
     }
     else {
         OSI_COMMON_LOG("Station mode\r\n");
-        status = configure_sta(wlan_cfg);
+        status = configure_sta(config);
     }
 
     if(status < 0) {
@@ -170,24 +179,25 @@ static void wlan_stop_task(void *params) {
 }
 
 
-_u8 wlan_init(void) {
+_i8 wlan_init(void) {
     int status;
 
     status = osi_LockObjCreate(&start_stop_lock);
     OSI_ASSERT_ON_ERROR(status);
 
+    sl_Start(NULL, NULL, 0);
+
     return SUCCESS;
 }
 
 
-_u8 wlan_start(WlanConfig *config) {
+_i8 wlan_start(WlanConfig *config) {
     int status;
 
     OSI_COMMON_LOG("wlan_start\r\n");
     /* Lock to avoid simultaneous start and stop of SIMPLELINK device */
     /* Will be unlocked at the end of wlan_start_task */
     osi_LockObjLock(&start_stop_lock, 0);
-    OSI_COMMON_LOG("Locked object\r\n");
 
     wl_status = WLAN_CONNECTING;
 
@@ -199,7 +209,7 @@ _u8 wlan_start(WlanConfig *config) {
 }
 
 
-_u8 wlan_stop(void) {
+_i8 wlan_stop(void) {
     int status;
 
     /* Lock to avoid simultaneous start and stop of SIMPLELINK device */
@@ -210,6 +220,78 @@ _u8 wlan_stop(void) {
     OSI_ASSERT_ON_ERROR(status);
 
     return SUCCESS;
+}
+
+
+_i8 wlan_save_config(WlanConfig *config) {
+    _i8 status;
+    long file_hdnl;
+
+    status = sl_FsOpen(CONFIG_FNAME,
+                       FS_MODE_OPEN_CREATE(CONFIG_FILE_MSIZE,
+                                           _FS_FILE_OPEN_FLAG_COMMIT |
+                                           _FS_FILE_OPEN_FLAG_NO_SIGNATURE_TEST |
+                                           _FS_FILE_PUBLIC_READ |
+                                           _FS_FILE_PUBLIC_WRITE),
+                        NULL, &file_hdnl);
+
+    if(status < 0) {
+        goto exit;
+    }
+
+    status = sl_FsWrite(file_hdnl, 0, (_u8 *)config, sizeof *config);
+
+    exit:
+        sl_FsClose(file_hdnl, NULL, NULL, 0);
+        OSI_ASSERT_ON_ERROR(status);
+
+        return SUCCESS;
+}
+
+
+_i8 wlan_load_config(WlanConfig *config) {
+    _i8 status;
+    long file_hdnl;
+
+    status = sl_FsOpen(CONFIG_FNAME, FS_MODE_OPEN_READ, NULL, &file_hdnl);
+    if(status < 0) {
+        goto exit;
+    }
+
+    status = sl_FsRead(file_hdnl, 0, (_u8*)config, sizeof *config);
+
+    exit:
+        sl_FsClose(file_hdnl, NULL, NULL, 0);
+        OSI_ASSERT_ON_ERROR(status);
+
+        return SUCCESS;
+}
+
+
+void wlan_print_config(WlanConfig *config) {
+    OSI_COMMON_LOG("******************WLAN CONFIG******************\r\n")
+
+    if(config->mode == WLAN_CONFIG_AP) {
+        OSI_COMMON_LOG("Mode: AP\r\n");
+    }
+    else {
+        OSI_COMMON_LOG("Mode: STATION\r\n");
+    }
+
+    if(config->sec == WLAN_CONFIG_WPA_WPA2) {
+        OSI_COMMON_LOG("Security: WPA-WPA2\r\n");
+    }
+    else if(config->sec == WLAN_CONFIG_OPEN) {
+        OSI_COMMON_LOG("Security: OPEN\r\n");
+    }
+
+    OSI_COMMON_LOG("Channel: %d\r\n", config->channel);
+
+    OSI_COMMON_LOG("SSID: %s\r\n", config->ssid);
+    OSI_COMMON_LOG("SSID length: %d\r\n", config->ssid_len);
+
+    OSI_COMMON_LOG("PWD: %s\r\n", config->pwd);
+    OSI_COMMON_LOG("PWD length: %d\r\n", config->pwd_len);
 }
 
 
