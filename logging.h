@@ -27,6 +27,7 @@ void logging_init(void);
 #define SERIAL_LOG  SYNCRONIZED_UART_PRINT
 
 #define OSI_COMMON_LOG  SERIAL_LOG
+#define OSI_ERROR_LOG   SYNCRONIZED_ERR_PRINT
 
 
 #define OSI_ASSERT_ON_ERROR(error_code)\
