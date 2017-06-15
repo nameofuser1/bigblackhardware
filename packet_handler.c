@@ -1,4 +1,6 @@
 #include "packet_handler.h"
+#include "protocol.h"
+#include "packets.h"
 
 #define     MAX_CLIENTS_NUM         2
 
@@ -12,8 +14,6 @@ static OsiMsgQ_t    connections_queue;
 
 
 /* Returns either number of bytes in the packet or FAILURE if header can not be parsed */
-static _i16 parse_header(_u8 *buf);
-static void parse_packet(_u8 *buf);
 static _i16 recv_nbytes(_i16 sock, _u8 *buf, _u16 n);
 
 
@@ -92,7 +92,7 @@ static void vReadingTask(void *pvParameters)
                     OSI_ASSERT_WITHOUT_EXIT(status);
 
                     /* Received header */
-                    _i16 packet_size = parse_header(data_buf);
+                    _i16 packet_size = pl_get_size_from_header(data_buf);
                     if(packet_size < 0) {
                         OSI_ASSERT_WITHOUT_EXIT(packet_size);
                     }
