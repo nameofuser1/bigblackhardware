@@ -1,35 +1,35 @@
 #ifndef PROTOCOL_H_INCLUDED
 #define PROTOCOL_H_INCLUDED
 
-#define PL_CONTROL_PACKETS_MSK         0x0F
-#define PL_PROGRAMMER_PACKETS_MSK      0x1F
-#define PL_UART_PACKETS_MSK            0x2F
+#define PL_CONTROL_PACKETS_MSK         0x10
+#define PL_PROGRAMMER_PACKETS_MSK      0x20
+#define PL_UART_PACKETS_MSK            0x30
 
 /* CONTROL PACKETS */
-#define PL_PROGRAMMER_INIT             0x00
-#define PL_PROGRAMMER_STOP             0x01
-#define PL_UART_INIT                   0x02
-#define PL_UART_STOP                   0x03
-#define PL_RESET                       0x04
-#define PL_ACK_PACKET                  0x05
-#define PL_CLOSE_CONNECTION            0x06
-#define PL_NETWORK_CONFIGURATION       0x07
-#define PL_SET_OBSERVER_KEY            0x08
-#define PL_SET_ENCRYPTION_KEYS         0x09
-#define PL_SET_SIGN_KEYS               0x0A
-#define PL_ENABLE_ENCRYPTION           0x0B
-#define PL_ENABLE_SIGN                 0x0C
+#define PL_PROGRAMMER_INIT             0x10
+#define PL_PROGRAMMER_STOP             0x11
+#define PL_UART_INIT                   0x12
+#define PL_UART_STOP                   0x13
+#define PL_RESET                       0x14
+#define PL_ACK_PACKET                  0x15
+#define PL_CLOSE_CONNECTION            0x16
+#define PL_NETWORK_CONFIGURATION       0x17
+#define PL_SET_OBSERVER_KEY            0x18
+#define PL_SET_ENCRYPTION_KEYS         0x19
+#define PL_SET_SIGN_KEYS               0x1A
+#define PL_ENABLE_ENCRYPTION           0x1B
+#define PL_ENABLE_SIGN                 0x1C
 
 /* PROGRAMMER PACKETS */
-#define PL_LOAD_MCU_INFO               0x10
-#define PL_PROGRAM_MEMORY              0x11
-#define PL_READ_MEMORY                 0x12
-#define PL_MEMORY                      0x13
-#define PL_CMD                         0x14
+#define PL_LOAD_MCU_INFO               0x20
+#define PL_PROGRAM_MEMORY              0x21
+#define PL_READ_MEMORY                 0x22
+#define PL_MEMORY                      0x23
+#define PL_CMD                         0x24
 
 /* UART PACKETS */
-#define PL_UART_CONFIGURATION          0x20
-#define PL_UART_DATA                   0x21
+#define PL_UART_CONFIGURATION          0x30
+#define PL_UART_DATA                   0x31
 
 /* Header structure */
 #define PL_START_FRAME_BYTE         0x1B
