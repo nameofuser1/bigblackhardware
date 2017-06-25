@@ -21,16 +21,8 @@
 #include "prcm.h"
 
 #include "common.h"
+#include "config.h"
 
-#define WLAN_UPDATER_STACK_SIZE 1024
-
-/*  */
-#define WIRED_UART              UARTA0_BASE
-#define WIRED_UART_PRCM         PRCM_UARTA0
-#define WIRED_UART_RX_DMA       UART_DMA_RX
-#define WIRED_MAX_CONFIG_SIZE   256
-
-#define WIRED_UART_BAUDRATE     115200
 
 typedef enum {StateRecvHeader=0, StateRecvBody} WiredState;
 
@@ -176,8 +168,8 @@ static void uart_irq_hdnl(void) {
         }
         UART_PRINT("\r\n");
 
-        status = osi_TaskCreate(updater_task, "updater_task", WLAN_UPDATER_STACK_SIZE,
-                                NULL, 2, &updater_hdnl);
+        status = osi_TaskCreate(updater_task, WIRED_CONF_TASK_NAME, WIRED_CONF_TASK_STACK_SIZE,
+                                NULL, WIRED_CONF_TASK_PRIO, &updater_hdnl);
 
         if(status < 0) {
             OSI_ERROR_LOG(status);
@@ -213,28 +205,3 @@ void wired_conf_start(void) {
     state = StateRecvHeader;
     wired_recv(PL_PACKET_HEADER_SIZE, 0);
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
