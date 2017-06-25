@@ -1,12 +1,8 @@
 #include "pool.h"
 
-#include <mem.h>
-#include <os_type.h>
-#include <espmissingincludes.h>
 
-
-static void update_ptr(uint32_t *ptr, uint32_t size) {
-	uint32_t p = *ptr;
+static void update_ptr(_u32 *ptr, const _u32 size) {
+	_u32 p = *ptr;
 
 	if(p == size - 1) {
 		*ptr = 0;
@@ -17,42 +13,42 @@ static void update_ptr(uint32_t *ptr, uint32_t size) {
 }
 
 
-void pool_create(pool_t *pool, const uint32_t item_size, 
-		const uint32_t max_pool_size) 
+void pool_create(pool_t *pool, const _u32 item_size,
+		const _u32 max_pool_size)
 {
 	pool->max_pool_size = max_pool_size;
 	pool->item_size = item_size;
 	pool->pool_size = 0;
 	pool->free_items = 0;
-	pool->data = os_malloc(max_pool_size * sizeof(void*));
+	pool->data = mem_Malloc(max_pool_size * sizeof(void*));
 }
 
 
-BOOL pool_delete(pool_t *pool) {
+_i8 pool_delete(pool_t *pool) {
 	if(pool->free_items != pool->pool_size) {
-		return FALSE;
+		return -1;
 	}
 
 	void *data = NULL;
-	for(uint32_t i=0; i<pool->pool_size; i++) {
+	for(_u32 i=0; i<pool->pool_size; i++) {
 		pool_get(pool, data);
-		os_free(data);
+		mem_Free(data);
 	}
 
-	return TRUE;
+	return 0;
 }
 
 
-BOOL pool_get(pool_t *pool, void **data) {
-	uint32_t pool_size = pool->pool_size;
-	uint32_t pool_msize = pool->max_pool_size;
-	uint32_t pool_free_items = pool->free_items;
+_i8 pool_get(pool_t *pool, void **data) {
+	_u32 pool_size = pool->pool_size;
+	_u32 pool_msize = pool->max_pool_size;
+	_u32 pool_free_items = pool->free_items;
 
 	if((pool_free_items == 0) && (pool_size == pool_msize)) {
-		return FALSE;
+		return -1;
 	}
 	else if(pool_free_items == 0) {
-		*data = os_malloc(pool->item_size);
+		*data = mem_Malloc(pool->item_size);
 		pool->pool_size++;
 	}
 	else {
@@ -60,19 +56,19 @@ BOOL pool_get(pool_t *pool, void **data) {
 		pool->free_items--;
 	}
 
-	return TRUE;
+	return 0;
 }
 
 
-BOOL pool_release(pool_t *pool, void *data) {
-	uint32_t pool_size = pool->pool_size;
-	uint32_t pool_free_items = pool->free_items;
+_i8 pool_release(pool_t *pool, void *data) {
+	_u32 pool_size = pool->pool_size;
+	_u32 pool_free_items = pool->free_items;
 
 	if(pool_free_items == pool_size) {
-		return FALSE;
+		return -1;
 	}
 
 	pool->data[pool->free_items++] = data;
 
-	return TRUE;
+	return 0;
 }

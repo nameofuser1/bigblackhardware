@@ -14,10 +14,10 @@ typedef struct _pool {
 } pool_t;
 
 
-void	pool_create(pool_t *pool, const uint32_t item_size, const uint32_t max_pool_size);
-BOOL	pool_delete(pool_t *pool);
-BOOL	pool_get(pool_t *pool, void **data);
-BOOL	pool_release(pool_t *pool, void *data);
+void	pool_create(pool_t *pool, const _u32 item_size, const _u32 max_pool_size);
+_i8	pool_delete(pool_t *pool);
+_i8	pool_get(pool_t *pool, void **data);
+_i8	pool_release(pool_t *pool, void *data);
 
 
 #endif
