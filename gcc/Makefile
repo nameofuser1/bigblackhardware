@@ -130,6 +130,9 @@ ${BINDIR}/$(PROJ_NAME).axf: ${OBJDIR}/udp_resolver.o
 ${BINDIR}/$(PROJ_NAME).axf: ${OBJDIR}/wired_configurator.o
 ${BINDIR}/$(PROJ_NAME).axf: ${OBJDIR}/sys.o
 ${BINDIR}/$(PROJ_NAME).axf: ${OBJDIR}/packets.o
+${BINDIR}/$(PROJ_NAME).axf: ${OBJDIR}/packet_handler.o
+${BINDIR}/$(PROJ_NAME).axf: ${OBJDIR}/pool.o
+
 
 # Common drivers
 ${BINDIR}/$(PROJ_NAME).axf: ${OBJDIR}/gpio_if.o
