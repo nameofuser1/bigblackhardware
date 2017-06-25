@@ -99,25 +99,12 @@
 #include "udp_resolver.h"
 #include "wired_configurator.h"
 #include "logging.h"
-//*****************************************************************************
-//                      MACRO DEFINITIONS
-//*****************************************************************************
-#define APPLICATION_VERSION     "1.1.1"
-#define UART_PRINT              Report
-#define SPAWN_TASK_PRIORITY     9
-#define OSI_STACK_SIZE          2048
-#define APP_NAME                "FreeRTOS Demo"
-#define MAX_MSG_LENGTH			16
+#include "packet_handler.h"
+#include "packets.h"
 
-#ifdef SSID_NAME
-#undef SSID_NAME
-#endif // SSID_NAME
+#include "config.h"
 
-#define SSID_NAME               "ChtoZaSet"
-#define SSID_PWD                "GrEs4242SeRg"
 
-#define UDP_RESOLVER_PORT       1094
-#define DEFAULT_DEVICE_KEY      "00000000000000000000000000000000"
 
 //*****************************************************************************
 //                 GLOBAL VARIABLES -- Start
@@ -219,62 +206,6 @@ void vApplicationStackOverflowHook( OsiTaskHandle *pxTask,
 #endif //USE_FREERTOS
 
 
-
-#define DATA_BUFFER_SIZE    1024
-#define PACKET_HEADER_SIZE  3
-
-/* Connections are passed through this queue from listening task to reading task */
-static OsiMsgQ_t    connections_queue;
-
-
-/* **************************************************
- *                Listening task                    *
- ****************************************************
- *                                                  *
- *   Configures WLAN module and load all necessary  *
- *      middleware drivers                          *
- *                                                  *
- * ************************************************ */
- #define TCP_LISTENING_PORT      1000
- #define TCP_LISTENING_ADDR      0x00
-
- /* 1 for programmer, 1 for UART */
- #define TCP_CONNECTION_NUM     2
-
- static OsiTaskHandle accept_task_hndl;
-
- static void vAcceptingTask(void *pvParameters) {
-    _i8 status;
-    _i16 listen_sock;
-    sockaddr_in local_addr;
-    sockaddr_in remote_addr;
-    socklen_t   remote_addr_l;
-
-    local_addr.sin_family = AF_INET;
-    local_addr.sin_port = htons(TCP_LISTENING_PORT);
-    local_addr.sin_addr.s_addr = INADDR_ANY;
-    listen_sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-
-    status = bind(listen_sock, (sockaddr*)&local_addr, sizeof local_addr);
-    OSI_ASSERT_WITH_EXIT(status, accept_task_hndl);
-
-    status = listen(listen_sock, TCP_CONNECTION_NUM);
-    OSI_ASSERT_WITH_EXIT(status, accept_task_hndl);
-
-    for( ;; ) {
-        _i16 conn = accept(listen_sock, (sockaddr*)&remote_addr, &remote_addr_l);
-
-        if(conn > 0) {
-        /* Here has to receive first packet and determine whether it is UART connection or programming one */
-        }
-        else {
-            /* Maximum connections are used. Wait till resources will be freed. */
-            OSI_ASSERT_WITHOUT_EXIT(conn);
-            osi_Sleep(5000);
-        }
-    }
- }
-
 /* Global variables for initialization task*/
 static OsiTaskHandle init_handle;
 
@@ -348,8 +279,11 @@ static void vInitializationTask(void *pvParameters) {
     status = udp_resolver_start(&cfg);
     OSI_ASSERT_WITH_EXIT(status, init_handle);
 
+    /* Start listening for clients and handling packets */
+    packet_handler_start();
 
 init_exit:
+    OSI_COMMON_LOG("Out of init task\r\n");
     osi_TaskDelete(&init_handle);
 }
 
@@ -443,11 +377,8 @@ int main( void )
     logging_init();
 
     VStartSimpleLinkSpawnTask(SPAWN_TASK_PRIORITY);
-
-    //osi_TaskCreate( vTestTask1, "TASK1",\
-    							OSI_STACK_SIZE, NULL, 1, NULL );
-
-    osi_TaskCreate(vInitializationTask, "InitTask", OSI_STACK_SIZE, NULL, 2, &init_handle);
+    osi_TaskCreate(vInitializationTask, INIT_TASK_NAME, INIT_TASK_STACK_SIZE,
+                   NULL, INIT_TASK_PRIORITY, &init_handle);
 
     osi_start();
 
