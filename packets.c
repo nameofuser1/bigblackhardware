@@ -1,29 +1,52 @@
 #include "packets.h"
+#include "pool.h"
+#include "common.h"
+#include "logging.h"
 
+/* Local functions prototypes */
 static _u8          get_type_from_header(_u8 *header);
 static _u16         get_size_from_header(_u8 *header);
 static PacketType   get_control_packet_type(_u8 _type);
 static PacketType   get_programmer_packet_type(_u8 _type);
 static PacketType   get_uart_packet_type(_u8 _type);
 static inline _u8   get_flag_bit(_u8 *header, _u8 bit);
+static inline void  set_flag_bit(_u8 *header, _u8 bit);
 
+/* Pool for packets */
+static pool_t       packets_pool;
 
 
 _i8 create_packet(Packet *packet, _u16 data_size) {
-    packet->packet_data = mem_Malloc(data_size);
+    //packet->packet_data = mem_Malloc(data_size);
 
-    if(packet->packet_data == NULL) {
-        return -1;
-    }
+    //if(packet->packet_data == NULL) {
+        //return -1;
+    //}
 
     return 0;
 }
 
 
+_i8 initialize_packets_pool(_u8 num) {
+    pool_create(&packets_pool, sizeof(Packet), num);
+
+    return 0;
+}
+
+
+_i8 get_packet_from_pool(Packet **packet) {
+    return pool_get(&packets_pool, (void**)packet);
+}
+
+
+_i8 release_packet(Packet *packet) {
+    return pool_release(&packets_pool, packet);
+}
+
+
 _i8 parse_header(_u8 *header, PacketHeader *packet_h) {
     _u16 size;
-    _u8 _type;
-    PacketType type;
+    _i16 _type;
 
     if(header[0] != PL_START_FRAME_BYTE) {
         return PACKET_WRONG_START_BYTE;
@@ -37,29 +60,118 @@ _i8 parse_header(_u8 *header, PacketHeader *packet_h) {
     _type = get_type_from_header(header);
 
     if(_type & PL_CONTROL_PACKETS_MSK) {
-        type = get_control_packet_type(_type);
+        OSI_COMMON_LOG("Trying to get control type\r\n");
+        _type = get_control_packet_type(_type);
     }
     else if(_type & PL_PROGRAMMER_PACKETS_MSK) {
-        type = get_programmer_packet_type(_type);
+        OSI_COMMON_LOG("Trying to get programmer type\r\n");
+        _type = get_programmer_packet_type(_type);
     }
     else if(_type & PL_UART_PACKETS_MSK) {
-        type = get_uart_packet_type(_type);
+        OSI_COMMON_LOG("Trying to get UART type\r\n");
+        _type = get_uart_packet_type(_type);
     }
     else {
         return PACKET_WRONG_TYPE;
     }
 
-    if(type < 0) {
+    if(_type < 0) {
         return PACKET_WRONG_TYPE;
     }
 
-    packet_h->type = type;
+    packet_h->type = _type;
     packet_h->data_size = size;
     packet_h->compression = get_flag_bit(header, PL_FLAG_COMPRESSION_BIT);
     packet_h->encryption = get_flag_bit(header, PL_FLAG_ENCRYPTION_BIT);
     packet_h->sign = get_flag_bit(header, PL_FLAG_SIGN_BIT);
 
     return PACKET_SUCCESS;
+}
+
+
+_i8 update_header(Packet *packet) {
+    PacketHeader header = packet->header;
+    _u16 data_size = header.data_size;
+    _u8 *raw_header = packet->raw_header;
+
+    if(data_size > PL_MAX_DATA_LENGTH) {
+        return PACKET_WRONG_SIZE;
+    }
+
+    raw_header[0] = PL_START_FRAME_BYTE;
+
+    for(int i=0; i<PL_SIZE_FIELD_SIZE; i++) {
+        raw_header[PL_SIZE_FIELD_OFFSET+i] = (data_size >> 8*(PL_SIZE_FIELD_SIZE-i-1)) & 0xFF;
+    }
+
+    raw_header[PL_FLAGS_FIELD_OFFSET] = 0x00;
+
+    if(header.compression) {
+        set_flag_bit(raw_header, PL_FLAG_COMPRESSION_BIT);
+    }
+
+    if(header.encryption) {
+        set_flag_bit(raw_header, PL_FLAG_ENCRYPTION_BIT);
+    }
+
+    if(header.sign) {
+        set_flag_bit(raw_header, PL_FLAG_SIGN_BIT);
+    }
+
+    return PACKET_SUCCESS;
+}
+
+
+static char* packets_types[PacketsNumber] = {
+    [ProgrammerInitPacket] = "Init programmer packet",
+    [ProgrammerStopPacket] = "Stop programmer packet",
+    [UartInitPacket] = "Init UART packet",
+    [UartStopPacket] = "Stop UART packet",
+    [ResetPacket] = "Reset Packet",
+    [ACKPacket] = "ACK packet",
+    [CloseConnectionPacket] = "Close connection packet",
+    [NetworkConfigurationPacket] = "Network configuration packet",
+    [EnableEncryptionPacket] = "Enable encryption packet",
+    [EnableSignPacket] = "Enable sign packet",
+    [EncryptionConfigPacket] = "Encryption config packet",
+    [SignConfigPacket] = "Sign config packet",
+    [ObserverKeyPacket] = "Observer key packet",
+
+    /* Programmer packets */
+    [LoadMCUInfoPacket] = "Load MCU packet",
+    [ProgramMemoryPacket] = "Program memory packet",
+    [ReadMemoryPacket] = "Read memory packet",
+    [MemoryPacket] = "Memory packet",
+    [CMDPacket] = "CMD packet",
+
+    /* UART packets */
+    [UartConfigurationPacket] = "UART config packet",
+    [UartDataPacket] = "Uart data packet"
+};
+
+
+static char* flag_status[2] = {
+    "Disabled",
+    "Enabled"
+};
+
+
+void print_packet(Packet *packet) {
+    PacketHeader header = packet->header;
+
+    OSI_COMMON_LOG("\r\n*********** PACKET *************\r\n");
+    OSI_COMMON_LOG("Type int: %d\r\n", header.type);
+    OSI_COMMON_LOG("Type: %s\r\n", packets_types[header.type]);
+    OSI_COMMON_LOG("Encryption: %s\r\n", flag_status[header.encryption]);
+    OSI_COMMON_LOG("Sign: %s\r\n", flag_status[header.sign]);
+    OSI_COMMON_LOG("Compression: %s\r\n", flag_status[header.compression]);
+    OSI_COMMON_LOG("Data size: %d\r\n", header.data_size);
+
+    int print_max = (10 > header.data_size) ? header.data_size : 10;
+    for(int i=0; i<print_max; i++) {
+        OSI_COMMON_LOG("0x%02x ", packet->packet_data[i]);
+    }
+    OSI_COMMON_LOG("...\r\n");
 }
 
 
@@ -81,7 +193,12 @@ static _u8 get_type_from_header(_u8 *header) {
 
 
 static inline _u8 get_flag_bit(_u8 *header, _u8 bit) {
-    return (header[PL_FLAGS_FIELD_OFFSET] >> bit) & 0xFF;
+    return (header[PL_FLAGS_FIELD_OFFSET] >> bit) & 0x01;
+}
+
+
+static inline void set_flag_bit(_u8 *header, _u8 bit) {
+    header[PL_FLAGS_FIELD_OFFSET] |= (1 << bit);
 }
 
 

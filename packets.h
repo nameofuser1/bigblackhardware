@@ -9,6 +9,8 @@
 #define PACKET_WRONG_SIZE          -2
 #define PACKET_WRONG_TYPE          -3
 
+#define PACKET_HEADER_SIZE          PL_PACKET_HEADER_SIZE
+
 
 typedef enum {
     /* Control packets */
@@ -35,7 +37,9 @@ typedef enum {
 
     /* UART packets */
     UartConfigurationPacket,
-    UartDataPacket
+    UartDataPacket,
+
+    PacketsNumber
 } PacketType;
 
 
@@ -55,13 +59,19 @@ typedef struct packet_header {
 typedef struct packet {
 
     PacketHeader        header;
-    _u8                 *packet_data;
+    _u8                 raw_header[PL_PACKET_HEADER_SIZE];
+    _u8                 packet_data[1024];
 
 } Packet;
 
 
-_i8 create_packet(Packet *packet, _u16 data_size);
-_i8 parse_header(_u8 *header, PacketHeader *packet_h);
+_i8     create_packet(Packet *packet, _u16 data_size);
+_i8     parse_header(_u8 *header, PacketHeader *packet_h);
+_i8     update_header(Packet *packet);
+_i8     initialize_packets_pool(_u8 num);
+_i8     get_packet_from_pool(Packet **packet);
+_i8     release_packet(Packet *packet);
+void    print_packet(Packet *packet);
 
 
 #endif // PACKETS_H_INCLUDED
