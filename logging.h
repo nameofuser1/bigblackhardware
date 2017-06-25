@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include "osi.h"
 #include "uart_if.h"
+#include "common.h"
 
 OsiLockObj_t print_lock;
 
@@ -11,7 +12,7 @@ void logging_init(void);
 
 
 #define SYNCRONIZED_UART_PRINT(fmt, ...)    {\
-                                                osi_LockObjLock(&print_lock, 0);\
+                                                osi_LockObjLock(&print_lock, OSI_WAIT_FOREVER);\
                                                 UART_PRINT(fmt, ##__VA_ARGS__);\
                                                 osi_LockObjUnlock(&print_lock);\
                                             }
