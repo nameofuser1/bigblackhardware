@@ -1,18 +1,20 @@
+#include <stddef.h>
+#include "osi.h"
+#include "socket.h"
+
 #include "packet_handler.h"
 #include "protocol.h"
 #include "packets.h"
-
-#include <stddef.h>
-#include "osi.h"
-
+#include "pool.h"
 #include "logging.h"
-#include "socket.h"
 
 #include "config.h"
 
 /* 10 ms timeout */
 #define     SELECT_TIMEOUT_US       10000
 #define     QUEUE_READ_TIMEOUT_MS   1
+
+#define     HNDL_INACTIVE           -1
 
 /* Tasks prototypes */
 static void vListeningTask(void *pvParameters);
@@ -23,18 +25,37 @@ static void vHandlingTask(void *pvParameters);
 static OsiTaskHandle    handling_task_hndl;
 static OsiTaskHandle    listen_task_hndl;
 
+/* Contains current connections */
+static ConnectionInfo   *conn_info[PACKETS_GROUPS_NUM] = {NULL, NULL, NULL};
+
+/* Pool for connections */
+static pool_t           connections_pool;
+
+/* Constructor for connections. Allocating queues */
+static void             conn_constructor(void *conn_info);
+
+
 /* Connections are passed through this queue from listening task to reading task */
 static OsiMsgQ_t        connections_queue;
 
+
 /* Static functions prototypes */
-static _i16 recv_packet(_i16 sock, Packet *packet);
-static _i16 send_packet(_i16 sock, Packet *packet);
-static _i16 recv_nbytes(_i16 sock, _u8 *buf, _u16 n);
-static _i16 send_nbytes(_i16 sock, _u8 *buf, _u16 n);
+static inline   _i16 get_read_fd(ConnectionInfo **conn_info, fd_set *set);
+static inline   _i16 process_packet(ConnectionInfo *info, Packet *packet);
+static inline   _i16 check_connection(ConnectionInfo *info);
+static inline   _i16 disable_connection(ConnectionInfo *info);
+
+static          _i16 recv_packet(_i16 sock, Packet *packet);
+static          _i16 send_packet(_i16 sock, Packet *packet);
+static          _i16 recv_nbytes(_i16 sock, _u8 *buf, _u16 n);
+static          _i16 send_nbytes(_i16 sock, _u8 *buf, _u16 n);
 
 
 _i8 packet_handler_start(void) {
     _i8 status;
+
+    /* Create pool for connections */
+    pool_create(&connections_pool, conn_constructor, sizeof(ConnectionInfo), MAX_TCP_CONNECTIONS);
 
     /* Initialize queue for passing connections through */
     status = osi_MsgQCreate(&connections_queue, "ConnectionsQueue",
@@ -68,30 +89,7 @@ _i8 packet_handler_stop(void) {
 }
 
 
-/* *************************************************** *
- * Build read fd_set given current connections.
- *
- * Return maximum socket handle.
- * *************************************************** */
-static inline _i16 get_read_fd(ConnectionInfo **conn_info, fd_set *set) {
-    _i16 max_fd = 0;
-    FD_ZERO(set);
 
-    for(int i=0; i<MAX_TCP_CONNECTIONS; i++) {
-        ConnectionInfo *info = conn_info[i];
-
-        if(info != NULL) {
-            _i16 hndl = info->hndl;
-            FD_SET(hndl, set);
-
-            if(hndl > max_fd) {
-                max_fd = hndl;
-            }
-        }
-    }
-
-    return max_fd;
-}
 
 /* **************************************************
  *                Listening task                    *
@@ -134,14 +132,12 @@ static inline _i16 get_read_fd(ConnectionInfo **conn_info, fd_set *set) {
         OSI_COMMON_LOG("Changed socket to non-blocking mode\r\n");
 
         if(conn > 0) {
-            ConnectionInfo *conn_info = mem_Malloc(sizeof *conn_info);
+            ConnectionInfo *conn_info;
+
+            status = pool_get(&connections_pool, (void**)&conn_info);
+            ASSERT_WITHOUT_EXIT(status);
+
             conn_info->hndl = conn;
-
-            status = osi_MsgQCreate(&conn_info->in_queue, NULL, sizeof(Packet*), MSG_QUEUE_SIZE);
-            ASSERT_WITHOUT_EXIT(status);
-
-            status = osi_MsgQCreate(&conn_info->out_queue, NULL, sizeof(Packet*), MSG_QUEUE_SIZE);
-            ASSERT_WITHOUT_EXIT(status);
 
             osi_MsgQWrite(&connections_queue, conn_info, 0);
             OSI_COMMON_LOG("Put connection onto connections queue\r\n");
@@ -168,7 +164,6 @@ static inline _i16 get_read_fd(ConnectionInfo **conn_info, fd_set *set) {
  * ******************************************************************/
 static void vHandlingTask(void *pvParameters)
 {
-    ConnectionInfo  *conn_info[2] = {NULL, NULL};
     ConnectionInfo  *info;
     _u8             conn_ptr = 0;
     _i16            status;
@@ -188,7 +183,7 @@ static void vHandlingTask(void *pvParameters)
     ASSERT_WITHOUT_EXIT(status);
     OSI_COMMON_LOG("Got first connection\r\n");
 
-    conn_info[conn_ptr++] = info;
+    conn_info[ControlGroup] = info;
 
     for( ;; ) {
         max_fd = get_read_fd(conn_info, &read_fd);
@@ -200,10 +195,10 @@ static void vHandlingTask(void *pvParameters)
         if(status > 0) {
             OSI_COMMON_LOG("There is data to read in %d sockets\r\n", status);
 
-            for(int i=0; i<MAX_TCP_CONNECTIONS; i++) {
+            for(int i=0; i<PACKETS_GROUPS_NUM; i++) {
                 info = conn_info[i];
 
-                if(info != NULL) {
+                if(check_connection(info) == SUCCESS) {
                     _i16 hndl = info->hndl;
 
                     /* Read on this socket is available */
@@ -217,10 +212,7 @@ static void vHandlingTask(void *pvParameters)
                         status = recv_packet(hndl, packet);
                         OSI_ASSERT_WITHOUT_EXIT(status);
 
-                        /* TODO: process received packet !*/
-                        /* RIGHT HERE */
-                        OSI_COMMON_LOG("Printing packet\r\n");
-                        print_packet(packet);
+                        process_packet(info, packet);
 
                         status = release_packet(packet);
                         OSI_ASSERT_WITHOUT_EXIT(status);
@@ -250,10 +242,158 @@ static void vHandlingTask(void *pvParameters)
         if(status >= 0) {
             OSI_COMMON_LOG("New connection found in queue\r\n");
 
-            conn_info[conn_ptr] = info;
-            conn_ptr = (conn_ptr == MAX_TCP_CONNECTIONS - 1) ? 0 : conn_ptr+1;
+            if(conn_info[ControlGroup] != NULL) {
+                OSI_COMMON_LOG("ERROR: two control connections at a time\r\n");
+                close(info->hndl);
+            }
+            else {
+                info->group = ControlGroup;
+                conn_info[ControlGroup] = info;
+            }
         }
     }
+}
+
+
+static inline _i16 process_packet(ConnectionInfo *info, Packet *packet) {
+    _i16 status;
+    PacketHeader header = packet->header;
+
+    OSI_COMMON_LOG("Printing packet\r\n");
+    print_packet(packet);
+
+    if(header.group == ControlGroup) {
+        switch(header.type) {
+
+        }
+    }
+    else {
+        status = osi_MsgQWrite(&info->in_queue, packet, MSG_QUEUE_WRITE_WAIT_MS);
+        OSI_ASSERT_ON_ERROR(status);
+    }
+
+    return status;
+}
+
+
+/*******************************************************
+                Pool constructor for connections
+********************************************************/
+
+static void conn_constructor(void *conn_info) {
+    _i16 status;
+    ConnectionInfo *info = conn_info;
+
+    status = osi_MsgQCreate(info->in_queue, NULL, sizeof(Packet*), MSG_QUEUE_SIZE);
+    OSI_ASSERT_WITHOUT_EXIT(status);
+
+    osi_MsgQCreate(info->out_queue, NULL, sizeof(Packet*), MSG_QUEUE_SIZE);
+    OSI_ASSERT_WITHOUT_EXIT(status);
+
+    info->hndl = HNDL_INACTIVE;
+}
+
+
+/*****************************************************************
+                PROCESSING FUNCTIONS FOR EACH PACKET
+******************************************************************/
+
+static _i16 proccess_prog_init(ConnectionInfo *info, Packet *packet) {
+}
+
+static _i16 proccess_prog_stop(ConnectionInfo *info, Packet *packet) {
+}
+
+static _i16 proccess_uart_init(ConnectionInfo *info, Packet *packet) {
+}
+
+
+static _i16 proccess_uart_stop(ConnectionInfo *info, Packet *packet) {
+}
+
+static _i16 proccess_reset(ConnectionInfo *info, Packet *packet) {
+    (void)packet;
+    _i16 status;
+
+
+}
+
+
+static _i16 proccess_close_conn(ConnectionInfo *info, Packet *packet) {
+    (void)packet;
+    _i16 status;
+
+    conn_info[info->group] = NULL;
+
+    status = disable_connection(info);
+    ASSERT_ON_ERROR(status);
+
+    status = pool_release(&connections_pool, info);
+    ASSERT_ON_ERROR(status);
+
+    return status;
+}
+
+
+static _i16 proccess_enable_encryption(ConnectionInfo *info, Packet *packet) {
+}
+
+
+static _i16 proccess_enable_sign(ConnectionInfo *info, Packet *packet) {
+}
+
+
+
+
+/******************************************************
+                    TRANSPORT FUNCTIONS
+*******************************************************/
+/* Check whether connection is alive or not */
+static _i16 check_connection(ConnectionInfo *info) {
+    if(info == NULL) {
+        return FAILURE;
+    }
+
+    return SUCCESS;
+}
+
+
+/* Close connection and set status to not alive */
+static _i16 disable_connection(ConnectionInfo *info) {
+    _i16 status;
+
+    status = close(info->hndl);
+    OSI_ASSERT_ON_ERROR(status);
+
+    info->hndl = HNDL_INACTIVE;
+
+    return status;
+}
+
+
+/* *************************************************** *
+ * Build read fd_set given current connections.
+ *
+ * Return maximum socket handle.
+ * *************************************************** */
+static inline _i16 get_read_fd(ConnectionInfo **conn_info, fd_set *set) {
+    _i16 max_fd = 0;
+    FD_ZERO(set);
+
+    for(int i=0; i<PACKETS_GROUPS_NUM; i++) {
+        ConnectionInfo *info = conn_info[i];
+
+        if(check_connection(info) == SUCCESS) {
+            _i16 hndl = info->hndl;
+            FD_SET(hndl, set);
+
+            if(hndl > max_fd) {
+                max_fd = hndl;
+            }
+        }
+    }
+
+    return max_fd;
 }
 
 
@@ -274,6 +414,7 @@ static _i16 send_packet(_i16 sock, Packet *packet) {
 static _i16 recv_packet(_i16 sock, Packet *packet) {
     _i16 status;
     _u16 packet_size;
+
     /* Trying to receive header */
     OSI_COMMON_LOG("Receiving header\r\n");
     status = recv_nbytes(sock, packet->raw_header, PACKET_HEADER_SIZE);
@@ -335,3 +476,6 @@ static _i16 send_nbytes(_i16 sock, _u8 *buf, _u16 n) {
 
     return SUCCESS;
 }
+
+
+

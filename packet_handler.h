@@ -3,13 +3,13 @@
 
 #include "simplelink.h"
 #include "osi.h"
+#include "packets.h"
 
-typedef enum {CONN_UART, CONN_PROGRAMMER} ConnectionType;
 
 typedef struct _connection_info {
 
     _i16            hndl;
-    ConnectionType  type;
+    PacketGroup     group;
 
     OsiMsgQ_t       in_queue;
     OsiMsgQ_t       out_queue;

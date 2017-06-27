@@ -61,5 +61,8 @@
 #define MSG_QUEUE_SIZE              5
 #define MSG_POOL_SIZE               (2*MSG_QUEUE_SIZE)
 
+/* Maximum time that can be taken to write into queue */
+#define MSG_QUEUE_WRITE_WAIT_MS     5
+
 
 #endif // CONFIG_H_INCLUDED

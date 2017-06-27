@@ -13,6 +13,15 @@
 
 
 typedef enum {
+    ControlGroup = 0,
+    ProgrammerGroup,
+    UartGroup,
+    PACKETS_GROUPS_NUM
+
+} PacketGroup;
+
+
+typedef enum {
     /* Control packets */
     ProgrammerInitPacket = 0,
     ProgrammerStopPacket,
@@ -46,6 +55,7 @@ typedef enum {
 typedef struct packet_header {
 
     PacketType  type;
+    PacketGroup group;
     _u16        data_size;
 
     /* Flags */

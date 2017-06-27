@@ -28,7 +28,7 @@ _i8 create_packet(Packet *packet, _u16 data_size) {
 
 
 _i8 initialize_packets_pool(_u8 num) {
-    pool_create(&packets_pool, sizeof(Packet), num);
+    pool_create(&packets_pool, NULL, sizeof(Packet), num);
 
     return 0;
 }
@@ -61,14 +61,17 @@ _i8 parse_header(_u8 *header, PacketHeader *packet_h) {
 
     if(_type & PL_CONTROL_PACKETS_MSK) {
         OSI_COMMON_LOG("Trying to get control type\r\n");
+        packet_h->group = ControlGroup;
         _type = get_control_packet_type(_type);
     }
     else if(_type & PL_PROGRAMMER_PACKETS_MSK) {
         OSI_COMMON_LOG("Trying to get programmer type\r\n");
+        packet_h->group = ProgrammerGroup;
         _type = get_programmer_packet_type(_type);
     }
     else if(_type & PL_UART_PACKETS_MSK) {
         OSI_COMMON_LOG("Trying to get UART type\r\n");
+        packet_h->group = UartGroup;
         _type = get_uart_packet_type(_type);
     }
     else {
