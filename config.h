@@ -64,5 +64,7 @@
 /* Maximum time that can be taken to write into queue */
 #define MSG_QUEUE_WRITE_WAIT_MS     5
 
+#define PROG_SPI_BASE               GSPI_BASE
+#define PROG_SPI_DEFAULT_FREQ       100000
 
 #endif // CONFIG_H_INCLUDED
