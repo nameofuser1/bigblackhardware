@@ -81,7 +81,9 @@ _i8     update_header(Packet *packet);
 _i8     initialize_packets_pool(_u8 num);
 _i8     get_packet_from_pool(Packet **packet);
 _i8     release_packet(Packet *packet);
-void    print_packet(Packet *packet);
+
+PacketGroup     get_type_group(PacketType type);
+void            print_packet(Packet *packet);
 
 
 #endif // PACKETS_H_INCLUDED

@@ -6,6 +6,7 @@
 #include "protocol.h"
 #include "packets.h"
 #include "pool.h"
+#include "programmer.h"
 #include "logging.h"
 
 #include "config.h"
@@ -299,10 +300,30 @@ static void conn_constructor(void *conn_info) {
 ******************************************************************/
 
 static _i16 proccess_prog_init(ConnectionInfo *info, Packet *packet) {
+    _i16 status;
+
+    status = programmer_resume(info->in_queue, info->out_queue);
+    ASSERT_ON_ERROR(status);
+
+    return status;
 }
 
+
 static _i16 proccess_prog_stop(ConnectionInfo *info, Packet *packet) {
+    _i16 status;
+    Packet *ack_packet;
+
+    status = programmer_pause();
+    ASSERT_ON_ERROR(status);
+
+    status = get_packet_from_pool(&ack_packet);
+    ASSERT_ON_ERROR(status);
+
+    PacketHeader *header = &ack_packet->header;
+
+    return status;
 }
+
 
 static _i16 proccess_uart_init(ConnectionInfo *info, Packet *packet) {
 }

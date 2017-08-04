@@ -56,7 +56,7 @@ _i16 programmer_start(void) {
 }
 
 
-_i16 programmer_resume(OsiMsgQ_t *in_queue, OsiMsgQ_t *out_queu) {
+_i16 programmer_resume(OsiMsgQ_t *in_queue, OsiMsgQ_t *out_queue) {
     _i16 status;
 
     status = osi_SyncObjSignal(&resume_obj);
