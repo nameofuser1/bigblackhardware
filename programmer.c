@@ -1,8 +1,12 @@
 #include "programmer.h"
-#include "osi.h"
 
+#include "hw_memmap.h"
+#include "rom_map.h"
+#include "prcm.h"
 #include "spi.h"
 #include "config.h"
+
+#include "logging.h"
 
 
 /* Current SPI bitrate */
@@ -63,6 +67,11 @@ _i16 programmer_resume(OsiMsgQ_t *in_queue, OsiMsgQ_t *out_queue) {
     OSI_ASSERT_ON_ERROR(status);
 
     return status;
+}
+
+
+_i16 programmer_pause(void) {
+    return 0;
 }
 
 

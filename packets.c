@@ -174,7 +174,13 @@ void print_packet(Packet *packet) {
     for(int i=0; i<print_max; i++) {
         OSI_COMMON_LOG("0x%02x ", packet->packet_data[i]);
     }
-    OSI_COMMON_LOG("...\r\n");
+
+    if (print_max < header.data_size) {
+        OSI_COMMON_LOG("...\r\n");
+    }
+    else {
+        OSI_COMMON_LOG("\r\n");
+    }
 }
 
 

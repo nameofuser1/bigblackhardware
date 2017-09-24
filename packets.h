@@ -52,6 +52,11 @@ typedef enum {
 } PacketType;
 
 
+#define CONTROL_PACKETS_NUM         (ObserverKeyPacket+1)
+#define PROGRAMMER_PACKETS_NUM      (CMDPacket - LoadMCUInfoPacket + 1)
+#define UART_PACKETS_NUM            (UartDataPacket - UartConfigurationPacket + 1)
+
+
 typedef struct packet_header {
 
     PacketType  type;

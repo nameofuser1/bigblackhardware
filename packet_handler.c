@@ -8,6 +8,7 @@
 #include "pool.h"
 #include "programmer.h"
 #include "logging.h"
+#include "sys.h"
 
 #include "config.h"
 
@@ -32,7 +33,8 @@ static ConnectionInfo   *conn_info[PACKETS_GROUPS_NUM] = {NULL, NULL, NULL};
 /* Pool for connections */
 static pool_t           connections_pool;
 
-/* Constructor for connections. Allocating queues */
+/* Constructor for connections which allocates queues.
+    Used in pool. */
 static void             conn_constructor(void *conn_info);
 
 
@@ -40,16 +42,44 @@ static void             conn_constructor(void *conn_info);
 static OsiMsgQ_t        connections_queue;
 
 
-/* Static functions prototypes */
-static inline   _i16 get_read_fd(ConnectionInfo **conn_info, fd_set *set);
-static inline   _i16 process_packet(ConnectionInfo *info, Packet *packet);
-static inline   _i16 check_connection(ConnectionInfo *info);
-static inline   _i16 disable_connection(ConnectionInfo *info);
+/* Packet handling functions */
+static _i16 process_prog_init(ConnectionInfo *info, Packet *packet);
+static _i16 process_prog_stop(ConnectionInfo *info, Packet *packet);
+static _i16 process_uart_init(ConnectionInfo *info, Packet *packet);
+static _i16 process_uart_stop(ConnectionInfo *info, Packet *packet);
+static _i16 process_reset(ConnectionInfo *info, Packet *packet);
+static _i16 process_close_conn(ConnectionInfo *info, Packet *packet);
+static _i16 process_enable_encryption(ConnectionInfo *info, Packet *packet);
+static _i16 process_enable_sign(ConnectionInfo *info, Packet *packet);
 
+
+/* Mapping from packet type to corresponding handler */
+typedef _i16 (*PacketHandler)(ConnectionInfo *info, Packet *packet);
+
+static PacketHandler packet_handlers[CONTROL_PACKETS_NUM] = {
+    [ProgrammerInitPacket] = process_prog_init,
+    [ProgrammerStopPacket] = process_prog_stop,
+    [UartInitPacket] = process_uart_init,
+    [UartStopPacket] = process_uart_stop,
+    [ResetPacket] = process_reset,
+    [CloseConnectionPacket] = process_close_conn,
+    [EnableEncryptionPacket] = process_enable_encryption,
+    [EnableSignPacket] = process_enable_sign
+};
+
+
+/* Function which helps to receive and send packets */
 static          _i16 recv_packet(_i16 sock, Packet *packet);
 static          _i16 send_packet(_i16 sock, Packet *packet);
 static          _i16 recv_nbytes(_i16 sock, _u8 *buf, _u16 n);
 static          _i16 send_nbytes(_i16 sock, _u8 *buf, _u16 n);
+
+
+/* Miscellaneous functions */
+static inline   _i16 get_read_fd(ConnectionInfo **conn_info, fd_set *set);
+static inline   _i16 process_packet(ConnectionInfo *info, Packet *packet);
+static inline   _i16 check_connection(ConnectionInfo *info);
+static inline   _i16 disable_connection(ConnectionInfo *info);
 
 
 _i8 packet_handler_start(void) {
@@ -88,7 +118,6 @@ _i8 packet_handler_stop(void) {
 
     return SUCCESS;
 }
-
 
 
 
@@ -136,14 +165,17 @@ _i8 packet_handler_stop(void) {
             ConnectionInfo *conn_info;
 
             status = pool_get(&connections_pool, (void**)&conn_info);
-            ASSERT_WITHOUT_EXIT(status);
+            OSI_ASSERT_WITHOUT_EXIT(status);
 
             conn_info->hndl = conn;
+            conn_info->group = ControlGroup;
 
-            osi_MsgQWrite(&connections_queue, conn_info, 0);
-            OSI_COMMON_LOG("Put connection onto connections queue\r\n");
+            status = sys_queue_write_ptr(&connections_queue, conn_info, 0);
+            OSI_ASSERT_WITHOUT_EXIT(status);
+
         }
         else {
+            OSI_COMMON_LOG("Maximum connections reached\r\n");
             /* Maximum connections are used. Wait till resources will be freed. */
             OSI_ASSERT_WITHOUT_EXIT(conn);
             osi_Sleep(5000);
@@ -180,17 +212,17 @@ static void vHandlingTask(void *pvParameters)
 
     /* Wait for the first connection */
     OSI_COMMON_LOG("Waiting for the first connection\r\n");
-    status = osi_MsgQRead(&connections_queue, info, OSI_WAIT_FOREVER);
+    status = sys_queue_read_ptr(&connections_queue, (void**)&info, OSI_WAIT_FOREVER);
     ASSERT_WITHOUT_EXIT(status);
     OSI_COMMON_LOG("Got first connection\r\n");
 
-    conn_info[ControlGroup] = info;
+    conn_info[info->group] = info;
 
     for( ;; ) {
         max_fd = get_read_fd(conn_info, &read_fd);
 
         /* MIN 10 MS WAITING */
-        status = select(max_fd, &read_fd, NULL, NULL, &select_time);
+        status = select(max_fd+1, &read_fd, NULL, NULL, &select_time);
         OSI_ASSERT_WITHOUT_EXIT(status);
 
         if(status > 0) {
@@ -209,7 +241,6 @@ static void vHandlingTask(void *pvParameters)
                         status = get_packet_from_pool(&packet);
                         OSI_ASSERT_WITHOUT_EXIT(status);
 
-                        OSI_COMMON_LOG("Receiving packet\r\n");
                         status = recv_packet(hndl, packet);
                         OSI_ASSERT_WITHOUT_EXIT(status);
 
@@ -217,21 +248,24 @@ static void vHandlingTask(void *pvParameters)
 
                         status = release_packet(packet);
                         OSI_ASSERT_WITHOUT_EXIT(status);
+
+                        FD_CLR(hndl, &read_fd);
                     }
 
                     /* Check whether there are packets to send */
-                    status = 0;
                     while(status >= 0) {
-                        status = osi_MsgQRead(&info->out_queue, packet, QUEUE_READ_TIMEOUT_MS);
+                        status = get_packet_from_pool(&packet);
+                        OSI_ASSERT_WITHOUT_EXIT(status);
+
+                        status = sys_queue_read_ptr(&info->out_queue, (void**)&packet, QUEUE_READ_TIMEOUT_MS);
 
                         if(status >= 0) {
+                            OSI_COMMON_LOG("Sending packet to %d\r\n", hndl);
                             update_header(packet);
                             send_packet(hndl, packet);
-
                             release_packet(packet);
                         }
                     }
-
                 }
             }
         }
@@ -239,13 +273,13 @@ static void vHandlingTask(void *pvParameters)
         /* Check for new connections
         MIN 1 MS WAITING
         TODO: rewrite USING lock objects */
-        status = osi_MsgQRead(&connections_queue, info, QUEUE_READ_TIMEOUT_MS);
+        status = sys_queue_read_ptr(&connections_queue, (void**)&info, QUEUE_READ_TIMEOUT_MS);
         if(status >= 0) {
-            OSI_COMMON_LOG("New connection found in queue\r\n");
+            //OSI_COMMON_LOG("New connection found in queue\r\n");
 
             if(conn_info[ControlGroup] != NULL) {
                 OSI_COMMON_LOG("ERROR: two control connections at a time\r\n");
-                close(info->hndl);
+                disable_connection(info);
             }
             else {
                 info->group = ControlGroup;
@@ -259,17 +293,13 @@ static void vHandlingTask(void *pvParameters)
 static inline _i16 process_packet(ConnectionInfo *info, Packet *packet) {
     _i16 status;
     PacketHeader header = packet->header;
-
-    OSI_COMMON_LOG("Printing packet\r\n");
     print_packet(packet);
 
     if(header.group == ControlGroup) {
-        switch(header.type) {
-
-        }
+        packet_handlers[header.type](info, packet);
     }
     else {
-        status = osi_MsgQWrite(&info->in_queue, packet, MSG_QUEUE_WRITE_WAIT_MS);
+        status = sys_queue_write_ptr(&info->in_queue, packet, MSG_QUEUE_WRITE_WAIT_MS);
         OSI_ASSERT_ON_ERROR(status);
     }
 
@@ -285,10 +315,10 @@ static void conn_constructor(void *conn_info) {
     _i16 status;
     ConnectionInfo *info = conn_info;
 
-    status = osi_MsgQCreate(info->in_queue, NULL, sizeof(Packet*), MSG_QUEUE_SIZE);
+    status = osi_MsgQCreate(&info->in_queue, NULL, sizeof(Packet*), MSG_QUEUE_SIZE);
     OSI_ASSERT_WITHOUT_EXIT(status);
 
-    osi_MsgQCreate(info->out_queue, NULL, sizeof(Packet*), MSG_QUEUE_SIZE);
+    osi_MsgQCreate(&info->out_queue, NULL, sizeof(Packet*), MSG_QUEUE_SIZE);
     OSI_ASSERT_WITHOUT_EXIT(status);
 
     info->hndl = HNDL_INACTIVE;
@@ -298,18 +328,17 @@ static void conn_constructor(void *conn_info) {
 /*****************************************************************
                 PROCESSING FUNCTIONS FOR EACH PACKET
 ******************************************************************/
-
-static _i16 proccess_prog_init(ConnectionInfo *info, Packet *packet) {
+static _i16 process_prog_init(ConnectionInfo *info, Packet *packet) {
     _i16 status;
 
-    status = programmer_resume(info->in_queue, info->out_queue);
+    status = programmer_resume(&info->in_queue, &info->out_queue);
     ASSERT_ON_ERROR(status);
 
     return status;
 }
 
 
-static _i16 proccess_prog_stop(ConnectionInfo *info, Packet *packet) {
+static _i16 process_prog_stop(ConnectionInfo *info, Packet *packet) {
     _i16 status;
     Packet *ack_packet;
 
@@ -325,14 +354,14 @@ static _i16 proccess_prog_stop(ConnectionInfo *info, Packet *packet) {
 }
 
 
-static _i16 proccess_uart_init(ConnectionInfo *info, Packet *packet) {
+static _i16 process_uart_init(ConnectionInfo *info, Packet *packet) {
 }
 
 
-static _i16 proccess_uart_stop(ConnectionInfo *info, Packet *packet) {
+static _i16 process_uart_stop(ConnectionInfo *info, Packet *packet) {
 }
 
-static _i16 proccess_reset(ConnectionInfo *info, Packet *packet) {
+static _i16 process_reset(ConnectionInfo *info, Packet *packet) {
     (void)packet;
     _i16 status;
 
@@ -340,10 +369,13 @@ static _i16 proccess_reset(ConnectionInfo *info, Packet *packet) {
 }
 
 
-static _i16 proccess_close_conn(ConnectionInfo *info, Packet *packet) {
+static _i16 process_close_conn(ConnectionInfo *info, Packet *packet) {
     (void)packet;
     _i16 status;
 
+    //OSI_COMMON_LOG("CLOSING CONNECTION\r\n");
+    //OSI_COMMON_LOG("Group: %d\r\n", info->group);
+    //OSI_COMMON_LOG("Socket: %d\r\n", info->hndl);
     conn_info[info->group] = NULL;
 
     status = disable_connection(info);
@@ -356,11 +388,11 @@ static _i16 proccess_close_conn(ConnectionInfo *info, Packet *packet) {
 }
 
 
-static _i16 proccess_enable_encryption(ConnectionInfo *info, Packet *packet) {
+static _i16 process_enable_encryption(ConnectionInfo *info, Packet *packet) {
 }
 
 
-static _i16 proccess_enable_sign(ConnectionInfo *info, Packet *packet) {
+static _i16 process_enable_sign(ConnectionInfo *info, Packet *packet) {
 }
 
 
@@ -371,7 +403,7 @@ static _i16 proccess_enable_sign(ConnectionInfo *info, Packet *packet) {
 *******************************************************/
 /* Check whether connection is alive or not */
 static _i16 check_connection(ConnectionInfo *info) {
-    if(info == NULL) {
+    if(info == NULL || info->hndl == HNDL_INACTIVE) {
         return FAILURE;
     }
 
@@ -441,8 +473,8 @@ static _i16 recv_packet(_i16 sock, Packet *packet) {
     status = recv_nbytes(sock, packet->raw_header, PACKET_HEADER_SIZE);
     OSI_ASSERT_ON_ERROR(status);
 
-    /* Parsing header header */
-    status = parse_header(packet->raw_header, &packet->header);
+    /* Parsing header */
+    status = parse_header(packet->raw_header, &(packet->header));
     OSI_ASSERT_ON_ERROR(status);
 
     /* Receiving body */
@@ -454,7 +486,7 @@ static _i16 recv_packet(_i16 sock, Packet *packet) {
         OSI_ASSERT_ON_ERROR(status);
     }
 
-    return SUCCESS;
+    return status;
 }
 
 
@@ -463,21 +495,20 @@ static _i16 recv_nbytes(_i16 sock, _u8 *buf, _u16 n) {
     _i16 recv_bytes;
 
     while(remaining_bytes != 0) {
-        OSI_COMMON_LOG("Trying to receive %d bytes on socket %d\r\n", n, sock);
         recv_bytes = recv(sock, buf, remaining_bytes, 0);
-        OSI_COMMON_LOG("Received %d bytes. Remaining %d\r\n", recv_bytes, remaining_bytes-recv_bytes);
 
         if(recv_bytes > 0) {
+            OSI_COMMON_LOG("Remaining: %d. Received %d bytes. The rest: %d\r\n", remaining_bytes,
+                           recv_bytes, remaining_bytes-recv_bytes);
             remaining_bytes -= recv_bytes;
         }
         else if(recv_bytes != EAGAIN) {
-            return FAILURE;
+            OSI_ERROR_LOG(recv_bytes)
+            return recv_bytes;
         }
         else {
-
+            osi_Sleep(1);
         }
-
-
     }
 
     return SUCCESS;

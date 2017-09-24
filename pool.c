@@ -1,5 +1,5 @@
 #include "pool.h"
-
+#include "logging.h"
 
 static void update_ptr(_u32 *ptr, const _u32 size) {
 	_u32 p = *ptr;
@@ -50,7 +50,7 @@ _i8 pool_get(pool_t *pool, void **data) {
 		return -1;
 	}
 	else if(pool_free_items == 0) {
-        *data = mem_Malloc(pool->item_size);
+       *data = mem_Malloc(pool->item_size);
         pool->pool_size++;
 
         if(constructor != NULL) {

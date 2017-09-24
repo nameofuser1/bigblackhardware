@@ -132,6 +132,7 @@ ${BINDIR}/$(PROJ_NAME).axf: ${OBJDIR}/sys.o
 ${BINDIR}/$(PROJ_NAME).axf: ${OBJDIR}/packets.o
 ${BINDIR}/$(PROJ_NAME).axf: ${OBJDIR}/packet_handler.o
 ${BINDIR}/$(PROJ_NAME).axf: ${OBJDIR}/pool.o
+${BINDIR}/$(PROJ_NAME).axf: ${OBJDIR}/programmer.o
 
 
 # Common drivers

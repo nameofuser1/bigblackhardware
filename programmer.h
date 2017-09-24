@@ -1,12 +1,9 @@
 #ifndef PROGRAMMER_H_INCLUDED
 #define PROGRAMMER_H_INCLUDED
 
+#include "hw_types.h"
+#include "simplelink.h"
 #include "osi.h"
-
-
-typedef {
-
-}ProgrammerConfig;
 
 
 _i16 programmer_start(void);
