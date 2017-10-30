@@ -102,7 +102,11 @@
 #include "packet_handler.h"
 #include "packets.h"
 
+#include "programmer.h"
+#include "bridge.h"
+
 #include "config.h"
+#include "sys.h"
 
 
 
@@ -237,6 +241,9 @@ static void vInitializationTask(void *pvParameters) {
     WlanConfig   config;
     int wlan_connecting_time;
 
+    /*** MCU RESET ***/
+    sys_reset_mcu(MCU_RESET_OFF);
+
     /* Initializing WLAN module first in order to enable simplelink */
     status = wlan_init();
     OSI_ASSERT_WITH_EXIT(status, init_handle);
@@ -256,7 +263,6 @@ static void vInitializationTask(void *pvParameters) {
     status = wlan_start(&config);
     OSI_ASSERT_WITH_EXIT(status, init_handle);
 
-    OSI_COMMON_LOG("Waiting for WLAN to be connected\r\n");
     /* Waiting for connection */
     WlanStatus wl_status;
     while((wl_status = wlan_status()) != WLAN_CONNECTED) {
@@ -269,9 +275,16 @@ static void vInitializationTask(void *pvParameters) {
         osi_Sleep(1000);
     }
 
-    OSI_COMMON_LOG("UDP resolver initialization\r\n");
+    /*** STARTING PROGRAMMER ***/
+    OSI_COMMON_LOG("Starting programming module...\r\n");
+    programmer_start();
 
-    /* Configure and start UDP resolver */
+    /*** STARTING BRIDGE ***/
+    OSI_COMMON_LOG("Starting bridge module... \r\n");
+    bridge_start(115200);
+
+    /*** STARTING UDP RESOLVER ***/
+    OSI_COMMON_LOG("UDP resolver initialization\r\n");
     UdpResolverCfg cfg;
     cfg.key = DEFAULT_DEVICE_KEY;
     cfg.port = UDP_RESOLVER_PORT;
@@ -279,7 +292,7 @@ static void vInitializationTask(void *pvParameters) {
     status = udp_resolver_start(&cfg);
     OSI_ASSERT_WITH_EXIT(status, init_handle);
 
-    /* Start listening for clients and handling packets */
+    /*** STARTING LISTENING AND PACKET HANDLING  ***/
     packet_handler_start();
 
 init_exit:
