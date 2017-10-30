@@ -71,7 +71,6 @@ _i16            get_prog_mem_data(Packet *packet, AvrProgMemData *mem_data);
 _i16            get_read_mem_data(Packet *packet, AvrReadMemData *mem_data);
 _i16            get_mcu_info(Packet *packet, AvrMcuInfo *mcu_data);
 _i16            check_cmd_status(_u8 *cmd, _u8 *answer);
-void            set_ack_data(_u8 *data, _i16 success);
 void            create_memory_cmd(char *pattern, _u8 pattern_len,
                                   _u32 addr, _u8 input, _u8 *cmd);
 

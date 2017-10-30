@@ -130,12 +130,16 @@ ${BINDIR}/$(PROJ_NAME).axf: ${OBJDIR}/logging.o
 ${BINDIR}/$(PROJ_NAME).axf: ${OBJDIR}/udp_resolver.o
 ${BINDIR}/$(PROJ_NAME).axf: ${OBJDIR}/wired_configurator.o
 ${BINDIR}/$(PROJ_NAME).axf: ${OBJDIR}/sys.o
-${BINDIR}/$(PROJ_NAME).axf: ${OBJDIR}/packets.o
-${BINDIR}/$(PROJ_NAME).axf: ${OBJDIR}/packet_handler.o
-${BINDIR}/$(PROJ_NAME).axf: ${OBJDIR}/pool.o
+
 ${BINDIR}/$(PROJ_NAME).axf: ${OBJDIR}/programmer.o
 ${BINDIR}/$(PROJ_NAME).axf: ${OBJDIR}/programmer_parser.o
 ${BINDIR}/$(PROJ_NAME).axf: ${OBJDIR}/bridge.o
+
+${BINDIR}/$(PROJ_NAME).axf: ${OBJDIR}/packets.o
+${BINDIR}/$(PROJ_NAME).axf: ${OBJDIR}/packet_handler.o
+${BINDIR}/$(PROJ_NAME).axf: ${OBJDIR}/packet_manager.o
+
+${BINDIR}/$(PROJ_NAME).axf: ${OBJDIR}/pool.o
 
 
 # Common drivers

@@ -203,13 +203,3 @@ void create_memory_cmd(char *pattern, _u8 pattern_len,
 		}
 	}
 }
-
-
-void set_ack_data(_u8 *data, _i16 success) {
-    if(success >= 0) {
-        data[0] = 1;
-    }
-    else {
-        data = 0;
-    }
-}

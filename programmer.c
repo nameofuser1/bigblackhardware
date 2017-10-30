@@ -14,6 +14,8 @@
 #include "programmer_parser.h"
 #include "protocol.h"
 
+#include "packet_manager.h"
+
 
 /* Current SPI bitrate */
 static int spi_bitrate = PROG_SPI_DEFAULT_FREQ;
@@ -43,11 +45,6 @@ static MsgQueues queues;
 static _i16 read_memory(AvrReadMemData *mem_data, _u8 *buf);
 static _i16 program_memory(AvrProgMemData *mem_data);
 
-static inline _i16 send_ack(_i16 status);
-static inline _i16 create_send_packet(PacketType type, _u8 *data, _u16 data_len);
-static inline _i16 send_packet(Packet *packet, PacketType type, _u16 data_len);
-static inline _i16 read_packet(Packet **packet);
-static inline _i16 write_packet(Packet *packet);
 static inline _i16 enable_pgm_mode(void);
 static inline void spi_enable(void);
 static inline void spi_disable(void);
@@ -188,7 +185,7 @@ static _i16 process_cmd_packet(Packet *packet) {
         OSI_COMMON_LOG("Failed to load AVR command\r\n");
     }
 
-    _i16 send_status = send_ack(status);
+    _i16 send_status = send_ack(status, queues.out_queue);
     OSI_ASSERT_ON_ERROR(send_status);
 
     return status;
@@ -213,7 +210,7 @@ static _i16 process_load_mcu_info_packet(Packet *packet) {
         OSI_COMMON_LOG("Failed to enter PGM mode\r\n");
     }
 
-    _i16 send_status = send_ack(status);
+    _i16 send_status = send_ack(status, queues.out_queue);
     OSI_ASSERT_ON_ERROR(send_status);
 
     return status;
@@ -230,7 +227,7 @@ static _i16 process_program_memory_packet(Packet *packet) {
 
     status = program_memory(&mem_data);
 
-    _i16 send_status = send_ack(status);
+    _i16 send_status = send_ack(status, queues.out_queue);
     OSI_ASSERT_ON_ERROR(send_status);
 
     return status;
@@ -252,11 +249,11 @@ static _i16 process_read_memory_packet(Packet *packet) {
     status = read_memory(&mem_data, memory_packet->packet_data);
 
     _i16 send_status;
-    send_status = send_ack(status);
+    send_status = send_ack(status, queues.out_queue);
     OSI_ASSERT_ON_ERROR(send_status);
 
     if(status >= 0) {
-        send_status = send_packet(packet, MemoryPacket, mem_data.bytes_to_read);
+        send_status = send_packet(packet, MemoryPacket, mem_data.bytes_to_read, queues.out_queue);
         OSI_ASSERT_ON_ERROR(send_status);
     }
 
@@ -513,61 +510,6 @@ static _i16 _read_eeprom_memory(AvrReadMemData *mem_info, _u8 *buf)
 /**************************************************************/
 /**                 ADDITIONAL FUNCTIONS SECTION             **/
 /**************************************************************/
-static inline _i16 send_ack(_i16 status) {
-    _i16 send_status;
-    _u8 ack_data[1];
-    set_ack_data(ack_data, status);
-
-    send_status = create_send_packet(ACKPacket, ack_data, 1);
-    OSI_ASSERT_ON_ERROR(send_status);
-
-    return send_status;
-}
-
-
-static inline _i16 create_send_packet(PacketType type, _u8 *data, _u16 data_len) {
-    _i16 status;
-    Packet *packet;
-
-    status = get_packet_from_pool(&packet);
-    OSI_ASSERT_ON_ERROR(status);
-
-    status = create_packet(packet, type, COMPRESSION_OFF, SIGN_OFF, ENCRYPTION_OFF,
-                data, data_len);
-    OSI_ASSERT_ON_ERROR(status);
-
-    return status;
-}
-
-
-static inline _i16 send_packet(Packet *packet, PacketType type, _u16 data_len) {
-    _i16 status;
-
-    /* Will not change packet_data field */
-    status = create_packet(packet, type, COMPRESSION_OFF, SIGN_OFF, ENCRYPTION_OFF,
-                           NULL, data_len);
-    OSI_ASSERT_ON_ERROR(status);
-
-    return status;
-}
-
-
-static inline _i16 read_packet(Packet **packet) {
-    _i16 status;
-
-    status = sys_queue_read_ptr(queues.in_queue, (void**)packet, 10);
-    return status;
-}
-
-
-static inline _i16 write_packet(Packet *packet) {
-    _i16 status;
-
-    status = sys_queue_write_ptr(queues.out_queue, packet, 10);
-    return status;
-}
-
-
 static _i16 enable_pgm_mode(void) {
 
 }

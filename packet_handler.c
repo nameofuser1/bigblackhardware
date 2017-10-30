@@ -356,6 +356,7 @@ static _i16 process_prog_stop(ConnectionInfo *info, Packet *packet) {
     PacketHeader *header = &ack_packet->header;
     header->type = ACKPacket;
 
+    release_packet(ack_packet);
 
     return status;
 }
@@ -378,9 +379,6 @@ static _i16 process_close_conn(ConnectionInfo *info, Packet *packet) {
     (void)packet;
     _i16 status;
 
-    //OSI_COMMON_LOG("CLOSING CONNECTION\r\n");
-    //OSI_COMMON_LOG("Group: %d\r\n", info->group);
-    //OSI_COMMON_LOG("Socket: %d\r\n", info->hndl);
     conn_info[info->group] = NULL;
 
     status = disable_connection(info);
