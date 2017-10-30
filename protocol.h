@@ -27,6 +27,9 @@
 #define PL_MEMORY                      0x23
 #define PL_CMD                         0x24
 
+#define PL_FLASH_MEMORY_BYTE           0x00
+#define PL_EEPROM_MEMORY_BYTE          0x01
+
 /* UART PACKETS */
 #define PL_UART_CONFIGURATION          0x30
 #define PL_UART_DATA                   0x31

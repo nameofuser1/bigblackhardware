@@ -16,35 +16,45 @@ static inline void  set_flag_bit(_u8 *header, _u8 bit);
 static pool_t       packets_pool;
 
 
-_i8 create_packet(Packet *packet, _u16 data_size) {
-    //packet->packet_data = mem_Malloc(data_size);
+_i16 create_packet(Packet *packet, PacketType type, _u8 comp,
+                  _u8 sign, _u8 enc, _u8 *data, _u16 data_size) {
+    _i16 status;
 
-    //if(packet->packet_data == NULL) {
-        //return -1;
-    //}
+    PacketHeader *header = &packet->header;
+    header->compression = comp;
+    header->sign = sign;
+    header->encryption = enc;
+    header->data_size = data_size;
 
-    return 0;
+    status = update_header(packet);
+    OSI_ASSERT_ON_ERROR(status);
+
+    if(data != NULL && data_size != 0) {
+        memcpy(packet->packet_data, data, data_size);
+    }
+
+    return status;
 }
 
 
-_i8 initialize_packets_pool(_u8 num) {
+_i16 initialize_packets_pool(_u8 num) {
     pool_create(&packets_pool, NULL, sizeof(Packet), num);
 
     return 0;
 }
 
 
-_i8 get_packet_from_pool(Packet **packet) {
+_i16 get_packet_from_pool(Packet **packet) {
     return pool_get(&packets_pool, (void**)packet);
 }
 
 
-_i8 release_packet(Packet *packet) {
+_i16 release_packet(Packet *packet) {
     return pool_release(&packets_pool, packet);
 }
 
 
-_i8 parse_header(_u8 *header, PacketHeader *packet_h) {
+_i16 parse_header(_u8 *header, PacketHeader *packet_h) {
     _u16 size;
     _i16 _type;
 
@@ -92,7 +102,7 @@ _i8 parse_header(_u8 *header, PacketHeader *packet_h) {
 }
 
 
-_i8 update_header(Packet *packet) {
+_i16 update_header(Packet *packet) {
     PacketHeader header = packet->header;
     _u16 data_size = header.data_size;
     _u8 *raw_header = packet->raw_header;

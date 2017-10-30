@@ -35,9 +35,9 @@
 #define WIRED_MAX_CONFIG_SIZE       256
 
 /* UART task. Do I need a task? */
-#define UART_TASK_STACK_SIZE        1024
-#define UART_TASK_NAME              "UartTask"
-#define UART_TASK_PRIO              2
+#define BRIDGE_TASK_STACK_SIZE      1024
+#define BRIDGE_TASK_NAME            "BidgeTask"
+#define BRIDGE_TASK_PRIO            2
 
 /* Programmer task */
 #define PROGRAMMER_TASK_STACK_SIZE  2048
@@ -66,5 +66,10 @@
 
 #define PROG_SPI_BASE               GSPI_BASE
 #define PROG_SPI_DEFAULT_FREQ       100000
+
+#define ENTER_PGM_ATTEMPS           10
+
+
+#define MCU_RESET_PIN               PIN_61
 
 #endif // CONFIG_H_INCLUDED

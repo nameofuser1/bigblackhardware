@@ -57,6 +57,7 @@ include ${ROOT}/tools/gcc_scripts/makedefs
 VPATH=$(PROJ_PATH)
 VPATH+=$(SDK_PATH)/drivers
 VPATH+=$(SDK_PATH)/common
+VPATH+=$(SDK_PATH)/driverlib
 VPATH+=$(SDK_PATH)/middleware/driver
 VPATH+=$(SDK_PATH)/middleware/driver/hal
 VPATH+=$(SDK_PATH)/middleware/framework/pm
@@ -133,9 +134,13 @@ ${BINDIR}/$(PROJ_NAME).axf: ${OBJDIR}/packets.o
 ${BINDIR}/$(PROJ_NAME).axf: ${OBJDIR}/packet_handler.o
 ${BINDIR}/$(PROJ_NAME).axf: ${OBJDIR}/pool.o
 ${BINDIR}/$(PROJ_NAME).axf: ${OBJDIR}/programmer.o
+${BINDIR}/$(PROJ_NAME).axf: ${OBJDIR}/programmer_parser.o
+${BINDIR}/$(PROJ_NAME).axf: ${OBJDIR}/bridge.o
 
 
 # Common drivers
+${BINDIR}/$(PROJ_NAME).axf: ${OBJDIR}/pin.o
+${BINDIR}/$(PROJ_NAME).axf: ${OBJDIR}/gpio.o
 ${BINDIR}/$(PROJ_NAME).axf: ${OBJDIR}/gpio_if.o
 ${BINDIR}/$(PROJ_NAME).axf: ${OBJDIR}/uart_if.o
 ${BINDIR}/$(PROJ_NAME).axf: ${OBJDIR}/udma_if.o

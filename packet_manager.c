@@ -1,17 +1,5 @@
 #include "packets.h"
 #include "osi.h"
-
-
-#define COMPRESSION_ON  1
-#define COMPRESSION_OFF 0
-
-#define SIGN_ON         1
-#define SIGN_OFF        0
-
-#define ENCRYPTION_ON   1
-#define ENCRYPTION_OFF  0
-
-
 Packet* PacketManager_create_packet(PacketType type, _u8 *data,
                                     _u8 data_size, _u8 comp, _u8 sign, _u8 enc) {
     _i16 status;

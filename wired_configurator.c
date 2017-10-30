@@ -187,7 +187,6 @@ static void uart_irq_hdnl(void) {
 
 
 void wired_conf_start(void) {
-    create_packet(&cfg_packet, WIRED_MAX_CONFIG_SIZE);
     UDMAInit();
 
     MAP_UARTIntRegister(WIRED_UART, uart_irq_hdnl);

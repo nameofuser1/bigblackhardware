@@ -261,7 +261,7 @@ static void vHandlingTask(void *pvParameters)
 
                         if(status >= 0) {
                             OSI_COMMON_LOG("Sending packet to %d\r\n", hndl);
-                            update_header(packet);
+                            //update_header(packet);
                             send_packet(hndl, packet);
                             release_packet(packet);
                         }
@@ -331,8 +331,11 @@ static void conn_constructor(void *conn_info) {
 static _i16 process_prog_init(ConnectionInfo *info, Packet *packet) {
     _i16 status;
 
-    status = programmer_resume(&info->in_queue, &info->out_queue);
-    ASSERT_ON_ERROR(status);
+    status = programmer_set_queues(&info->in_queue, &info->out_queue);
+    OSI_ASSERT_ON_ERROR(status);
+
+    status = programmer_resume();
+    OSI_ASSERT_ON_ERROR(status);
 
     return status;
 }
@@ -340,15 +343,19 @@ static _i16 process_prog_init(ConnectionInfo *info, Packet *packet) {
 
 static _i16 process_prog_stop(ConnectionInfo *info, Packet *packet) {
     _i16 status;
+    OSI_COMMON_LOG("Stopping programmer\r\n");
     Packet *ack_packet;
-
-    status = programmer_pause();
-    ASSERT_ON_ERROR(status);
 
     status = get_packet_from_pool(&ack_packet);
     ASSERT_ON_ERROR(status);
 
+    status = programmer_pause();
+    ASSERT_ON_ERROR(status);
+
+
     PacketHeader *header = &ack_packet->header;
+    header->type = ACKPacket;
+
 
     return status;
 }
@@ -364,8 +371,6 @@ static _i16 process_uart_stop(ConnectionInfo *info, Packet *packet) {
 static _i16 process_reset(ConnectionInfo *info, Packet *packet) {
     (void)packet;
     _i16 status;
-
-
 }
 
 

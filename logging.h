@@ -31,6 +31,14 @@ void logging_init(void);
 #define OSI_ERROR_LOG   SYNCRONIZED_ERR_PRINT
 
 
+#define OSI_ARRAY_LOG(fmt, arr, arr_len, ...)   {\
+                                                    osi_LockObjLock(&print_lock, OSI_WAIT_FOREVER);\
+                                                    if(fmt != NULL) {UART_PRINT(fmt, ##__VA_ARGS__);}\
+                                                    for(int i=0; i<arr_len; i++) {UART_PRINT("0x%02x ", arr[i]);}\
+                                                    UART_PRINT("\r\n");\
+                                                    osi_LockObjUnlock(&print_lock);\
+                                                }
+
 #define OSI_ASSERT_ON_ERROR(error_code)\
             {\
                 if(error_code < 0) \

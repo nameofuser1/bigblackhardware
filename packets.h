@@ -12,6 +12,16 @@
 #define PACKET_HEADER_SIZE          PL_PACKET_HEADER_SIZE
 
 
+#define COMPRESSION_ON  1
+#define COMPRESSION_OFF 0
+
+#define SIGN_ON         1
+#define SIGN_OFF        0
+
+#define ENCRYPTION_ON   1
+#define ENCRYPTION_OFF  0
+
+
 typedef enum {
     ControlGroup = 0,
     ProgrammerGroup,
@@ -56,6 +66,9 @@ typedef enum {
 #define PROGRAMMER_PACKETS_NUM      (CMDPacket - LoadMCUInfoPacket + 1)
 #define UART_PACKETS_NUM            (UartDataPacket - UartConfigurationPacket + 1)
 
+#define CONTROL_PACKETS_SHIFT       (0)
+#define PROGRAMMER_PACKETS_SHIFT    (CONTROL_PACKETS_NUM)
+#define UART_PACKETS_SHIFT          (CONTROL_PACKETS_NUM + PROGRAMMER_PACKETS_NUM)
 
 typedef struct packet_header {
 
@@ -80,12 +93,13 @@ typedef struct packet {
 } Packet;
 
 
-_i8     create_packet(Packet *packet, _u16 data_size);
-_i8     parse_header(_u8 *header, PacketHeader *packet_h);
-_i8     update_header(Packet *packet);
-_i8     initialize_packets_pool(_u8 num);
-_i8     get_packet_from_pool(Packet **packet);
-_i8     release_packet(Packet *packet);
+_i16    create_packet(Packet *packet, PacketType type, _u8 comp,
+                  _u8 sign, _u8 enc, _u8 *data, _u16 data_size);
+_i16     parse_header(_u8 *header, PacketHeader *packet_h);
+_i16     update_header(Packet *packet);
+_i16     initialize_packets_pool(_u8 num);
+_i16     get_packet_from_pool(Packet **packet);
+_i16     release_packet(Packet *packet);
 
 PacketGroup     get_type_group(PacketType type);
 void            print_packet(Packet *packet);
