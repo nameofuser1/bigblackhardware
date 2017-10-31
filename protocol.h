@@ -19,6 +19,7 @@
 #define PL_SET_SIGN_KEYS               0x1A
 #define PL_ENABLE_ENCRYPTION           0x1B
 #define PL_ENABLE_SIGN                 0x1C
+#define PL_ERROR_PACKET                0x1D
 
 /* PROGRAMMER PACKETS */
 #define PL_LOAD_MCU_INFO               0x20

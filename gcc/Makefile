@@ -131,6 +131,8 @@ ${BINDIR}/$(PROJ_NAME).axf: ${OBJDIR}/udp_resolver.o
 ${BINDIR}/$(PROJ_NAME).axf: ${OBJDIR}/wired_configurator.o
 ${BINDIR}/$(PROJ_NAME).axf: ${OBJDIR}/sys.o
 
+${BINDIR}/$(PROJ_NAME).axf: ${OBJDIR}/controller.o
+
 ${BINDIR}/$(PROJ_NAME).axf: ${OBJDIR}/programmer.o
 ${BINDIR}/$(PROJ_NAME).axf: ${OBJDIR}/programmer_parser.o
 ${BINDIR}/$(PROJ_NAME).axf: ${OBJDIR}/bridge.o

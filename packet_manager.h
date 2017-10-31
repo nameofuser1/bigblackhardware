@@ -8,6 +8,10 @@
 
 
 _i16 send_ack(_i16 status, OsiMsgQ_t *out_queue);
+_i16 send_error(char *msg, OsiMsgQ_t *out_queue);
+_i16 send_avr_cmd(_u8 *cmd, OsiMsgQ_t *out_queue);
+_i16 send_memory(_u8 *memory, OsiMsgQ_t *out_queue);
+
 _i16 create_send_packet(PacketType type, _u8 *data, _u16 data_len, OsiMsgQ_t *out_queue);
 _i16 send_packet(Packet *packet, PacketType type, _u16 data_len, OsiMsgQ_t *out_queue);
 _i16 read_packet(Packet **packet, OsiMsgQ_t *out_queue, _u8 timeout);

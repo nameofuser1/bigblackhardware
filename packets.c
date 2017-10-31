@@ -271,6 +271,10 @@ static PacketType get_programmer_packet_type(_u8 _type) {
             type = CMDPacket;
             break;
 
+        case PL_ERROR_PACKET:
+            type = ErrorPacket;
+            break;
+
         default:
             type = -1;
     }
@@ -333,6 +337,10 @@ static PacketType get_control_packet_type(_u8 _type) {
 
         case PL_SET_OBSERVER_KEY:
             type = ObserverKeyPacket;
+            break;
+
+        case PL_ERROR_PACKET:
+            type = ErrorPacket;
             break;
 
         default:

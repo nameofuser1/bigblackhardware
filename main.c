@@ -275,10 +275,6 @@ static void vInitializationTask(void *pvParameters) {
         osi_Sleep(1000);
     }
 
-    /*** STARTING PROGRAMMER ***/
-    OSI_COMMON_LOG("Starting programming module...\r\n");
-    programmer_start();
-
     /*** STARTING BRIDGE ***/
     OSI_COMMON_LOG("Starting bridge module... \r\n");
     bridge_start(115200);

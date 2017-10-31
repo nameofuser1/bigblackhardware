@@ -6,11 +6,11 @@
 #include "protocol.h"
 #include "packets.h"
 #include "pool.h"
-#include "programmer.h"
 #include "logging.h"
 #include "sys.h"
 
 #include "config.h"
+#include "controller.h"
 
 /* 10 ms timeout */
 #define     SELECT_TIMEOUT_US       10000
@@ -37,35 +37,8 @@ static pool_t           connections_pool;
     Used in pool. */
 static void             conn_constructor(void *conn_info);
 
-
 /* Connections are passed through this queue from listening task to reading task */
 static OsiMsgQ_t        connections_queue;
-
-
-/* Packet handling functions */
-static _i16 process_prog_init(ConnectionInfo *info, Packet *packet);
-static _i16 process_prog_stop(ConnectionInfo *info, Packet *packet);
-static _i16 process_uart_init(ConnectionInfo *info, Packet *packet);
-static _i16 process_uart_stop(ConnectionInfo *info, Packet *packet);
-static _i16 process_reset(ConnectionInfo *info, Packet *packet);
-static _i16 process_close_conn(ConnectionInfo *info, Packet *packet);
-static _i16 process_enable_encryption(ConnectionInfo *info, Packet *packet);
-static _i16 process_enable_sign(ConnectionInfo *info, Packet *packet);
-
-
-/* Mapping from packet type to corresponding handler */
-typedef _i16 (*PacketHandler)(ConnectionInfo *info, Packet *packet);
-
-static PacketHandler packet_handlers[CONTROL_PACKETS_NUM] = {
-    [ProgrammerInitPacket] = process_prog_init,
-    [ProgrammerStopPacket] = process_prog_stop,
-    [UartInitPacket] = process_uart_init,
-    [UartStopPacket] = process_uart_stop,
-    [ResetPacket] = process_reset,
-    [CloseConnectionPacket] = process_close_conn,
-    [EnableEncryptionPacket] = process_enable_encryption,
-    [EnableSignPacket] = process_enable_sign
-};
 
 
 /* Function which helps to receive and send packets */
@@ -77,8 +50,8 @@ static          _i16 send_nbytes(_i16 sock, _u8 *buf, _u16 n);
 
 /* Miscellaneous functions */
 static inline   _i16 get_read_fd(ConnectionInfo **conn_info, fd_set *set);
-static inline   _i16 process_packet(ConnectionInfo *info, Packet *packet);
 static inline   _i16 check_connection(ConnectionInfo *info);
+static inline   _i16 close_conn(ConnectionInfo *info, Packet *packet);
 static inline   _i16 disable_connection(ConnectionInfo *info);
 
 
@@ -244,7 +217,12 @@ static void vHandlingTask(void *pvParameters)
                         status = recv_packet(hndl, packet);
                         OSI_ASSERT_WITHOUT_EXIT(status);
 
-                        process_packet(info, packet);
+                        if(packet->header.type == CloseConnectionPacket) {
+                            close_conn(info, packet);
+                        }
+                        else {
+                            process_packet(info->out_queue, packet);
+                        }
 
                         status = release_packet(packet);
                         OSI_ASSERT_WITHOUT_EXIT(status);
@@ -290,21 +268,25 @@ static void vHandlingTask(void *pvParameters)
 }
 
 
-static inline _i16 process_packet(ConnectionInfo *info, Packet *packet) {
-    _i16 status;
-    PacketHeader header = packet->header;
-    print_packet(packet);
 
-    if(header.group == ControlGroup) {
-        packet_handlers[header.type](info, packet);
-    }
-    else {
-        status = sys_queue_write_ptr(&info->in_queue, packet, MSG_QUEUE_WRITE_WAIT_MS);
-        OSI_ASSERT_ON_ERROR(status);
+/* Closing connection */
+static _i16 close_conn(ConnectionInfo *info, Packet *packet) {
+    (void)packet;
+    _i16 status;
+
+    conn_info[info->group] = NULL;
+
+    status = disable_connection(info);
+    ASSERT_ON_ERROR(status);
+
+    if(packet != NULL) {
+        status = pool_release(&connections_pool, info);
+        ASSERT_ON_ERROR(status);
     }
 
     return status;
 }
+
 
 
 /*******************************************************
@@ -323,81 +305,6 @@ static void conn_constructor(void *conn_info) {
 
     info->hndl = HNDL_INACTIVE;
 }
-
-
-/*****************************************************************
-                PROCESSING FUNCTIONS FOR EACH PACKET
-******************************************************************/
-static _i16 process_prog_init(ConnectionInfo *info, Packet *packet) {
-    _i16 status;
-
-    status = programmer_set_queues(&info->in_queue, &info->out_queue);
-    OSI_ASSERT_ON_ERROR(status);
-
-    status = programmer_resume();
-    OSI_ASSERT_ON_ERROR(status);
-
-    return status;
-}
-
-
-static _i16 process_prog_stop(ConnectionInfo *info, Packet *packet) {
-    _i16 status;
-    OSI_COMMON_LOG("Stopping programmer\r\n");
-    Packet *ack_packet;
-
-    status = get_packet_from_pool(&ack_packet);
-    ASSERT_ON_ERROR(status);
-
-    status = programmer_pause();
-    ASSERT_ON_ERROR(status);
-
-
-    PacketHeader *header = &ack_packet->header;
-    header->type = ACKPacket;
-
-    release_packet(ack_packet);
-
-    return status;
-}
-
-
-static _i16 process_uart_init(ConnectionInfo *info, Packet *packet) {
-}
-
-
-static _i16 process_uart_stop(ConnectionInfo *info, Packet *packet) {
-}
-
-static _i16 process_reset(ConnectionInfo *info, Packet *packet) {
-    (void)packet;
-    _i16 status;
-}
-
-
-static _i16 process_close_conn(ConnectionInfo *info, Packet *packet) {
-    (void)packet;
-    _i16 status;
-
-    conn_info[info->group] = NULL;
-
-    status = disable_connection(info);
-    ASSERT_ON_ERROR(status);
-
-    status = pool_release(&connections_pool, info);
-    ASSERT_ON_ERROR(status);
-
-    return status;
-}
-
-
-static _i16 process_enable_encryption(ConnectionInfo *info, Packet *packet) {
-}
-
-
-static _i16 process_enable_sign(ConnectionInfo *info, Packet *packet) {
-}
-
 
 
 

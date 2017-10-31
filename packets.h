@@ -46,6 +46,7 @@ typedef enum {
     EncryptionConfigPacket,
     SignConfigPacket,
     ObserverKeyPacket,
+    ErrorPacket,
 
     /* Programmer packets */
     LoadMCUInfoPacket,

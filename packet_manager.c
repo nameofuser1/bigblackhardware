@@ -3,6 +3,7 @@
 #include "sys.h"
 #include "osi.h"
 
+#include "programmer_parser.h"
 #include "logging.h"
 
 
@@ -23,6 +24,26 @@ _i16 send_ack(_i16 status, OsiMsgQ_t *out_queue) {
     OSI_ASSERT_ON_ERROR(send_status);
 
     return send_status;
+}
+
+
+_i16 send_error(char *msg, OsiMsgQ_t *out_queue) {
+    _i16 send_status;
+
+    send_status = create_send_packet(ErrorPacket, (_u8*)msg, strlen(msg), out_queue);
+    OSI_ASSERT_ON_ERROR(send_status);
+
+    return send_status;
+}
+
+
+_i16 send_avr_cmd(_u8 *cmd, OsiMsgQ_t *out_queue) {
+    _i16 status;
+
+    status = create_send_packet(CMDPacket, cmd, AVR_CMD_SIZE, out_queue);
+    OSI_ASSERT_ON_ERROR(status);
+
+    return status;
 }
 
 

@@ -61,7 +61,7 @@ typedef struct {
 
 typedef struct {
 
-	_u8 cmd[4];
+	_u8 cmd[AVR_CMD_SIZE];
 
 } AvrCommand;
 
