@@ -17,6 +17,12 @@
 #include "packet_manager.h"
 
 
+/* Entering PGM mode parameters */
+#define PGM_ENABLE_RETRIES		30
+#define PGM_ENABLE_DELAY_MS		5
+#define DELAY_AFTER_RESET_MS	20
+
+
 /* Current SPI bitrate */
 static int spi_bitrate = PROG_SPI_DEFAULT_FREQ;
 
@@ -52,7 +58,46 @@ void programmer_set_mcu_info(AvrMcuInfo *info) {
 
 
 _i16 programmer_enable_pgm_mode(void) {
-    return 0;
+    OSI_COMMON_LOG("Trying to enter into programming mode\r\n");
+
+	_u8 res[AVR_CMD_SIZE];
+	_u8 success = 0;
+
+    configure_spi(4000000);
+    spi_enable();
+    osi_Sleep(5);
+
+    sys_reset_mcu(MCU_RESET_ON);
+    osi_Sleep(50);
+
+	for(_u32 i=0; i<PGM_ENABLE_RETRIES; i++)
+	{
+		programmer_write_raw_cmd(mcu_info->pgm_enable, res);
+
+		if(res[2] == mcu_info->pgm_enable[1])
+		{
+			OSI_COMMON_LOG("Successfully entered programming mode. %ul retries\r\n", i+1);
+			success = 1;
+			break;
+		}
+		else
+		{
+			OSI_COMMON_LOG("AVR answer: %ul  %ul %ul %ul\r\n",
+					res[0], res[1], res[2], res[3]);
+
+			osi_Sleep(PGM_ENABLE_DELAY_MS);
+			sys_reset_mcu(MCU_RESET_OFF);
+			osi_Sleep(PGM_ENABLE_DELAY_MS);
+            sys_reset_mcu(MCU_RESET_ON);
+			osi_Sleep(PGM_ENABLE_DELAY_MS);
+		}
+	}
+
+	if(!success) {
+        spi_disable();
+	}
+
+	return success;
 }
 
 

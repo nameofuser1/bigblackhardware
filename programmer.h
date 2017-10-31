@@ -7,6 +7,7 @@
 
 #include "programmer_parser.h"
 
+
 void programmer_set_mcu_info(AvrMcuInfo *info);
 _i16 programmer_enable_pgm_mode(void);
 _i16 programmer_write_cmd(AvrCommand *cmd, AvrCommand *answer);
