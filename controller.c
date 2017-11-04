@@ -57,7 +57,7 @@ _i16 process_packet(OsiMsgQ_t *out_queue, Packet *packet) {
     PacketHeader header = packet->header;
     print_packet(packet);
 
-    packet_handlers[header.type](out_queue, packet);
+    status = packet_handlers[header.type](out_queue, packet);
 
     return status;
 }
@@ -142,7 +142,7 @@ static _i16 process_cmd_packet(OsiMsgQ_t *out_queue, Packet *packet) {
         OSI_ARRAY_LOG("\tAnswer: ", answer.cmd, AVR_CMD_SIZE);
 
         send_error("Failed to load command into MCU\r\n", out_queue);
-        OSI_ASSERT_ON_ERROR(status);
+        OSI_ASSERT_WITHOUT_EXIT(status);
     }
 
     status = send_avr_cmd(answer.cmd, out_queue);
@@ -172,9 +172,12 @@ static _i16 process_load_mcu_info_packet(OsiMsgQ_t *out_queue, Packet *packet) {
     }
 
     if(status < 0) {
-        send_error("Failed to enter PGM mode\r\n", out_queue);
-        OSI_ASSERT_ON_ERROR(status);
+        status = send_error("Failed to enter PGM mode\r\n", out_queue);
+        SYS_ASSERT_CRITICAL(status);
     }
+
+    status = send_ack(status, out_queue);
+    SYS_ASSERT_CRITICAL(status);
 
     return status;
 }
@@ -192,11 +195,11 @@ static _i16 process_program_memory_packet(OsiMsgQ_t *out_queue, Packet *packet) 
 
     if(status < 0) {
         send_error("Failed to program memory\r\n", out_queue);
-        OSI_ASSERT_ON_ERROR(status);
+        SYS_ASSERT_CRITICAL(status);
     }
 
     status = send_ack(status, out_queue);
-    OSI_ASSERT_ON_ERROR(status);
+    SYS_ASSERT_CRITICAL(status);
 
     return status;
 }
