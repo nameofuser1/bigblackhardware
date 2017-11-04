@@ -58,17 +58,16 @@ void programmer_set_mcu_info(AvrMcuInfo *info) {
 
 
 _i16 programmer_enable_pgm_mode(void) {
-    OSI_COMMON_LOG("Trying to enter into programming mode\r\n");
-
 	_u8 res[AVR_CMD_SIZE];
 	_u8 success = 0;
 
-    configure_spi(4000000);
+    configure_spi(400000);
     spi_enable();
     osi_Sleep(5);
 
     sys_reset_mcu(MCU_RESET_ON);
     osi_Sleep(50);
+
 
 	for(_u32 i=0; i<PGM_ENABLE_RETRIES; i++)
 	{
@@ -94,6 +93,7 @@ _i16 programmer_enable_pgm_mode(void) {
 	}
 
 	if(!success) {
+        OSI_COMMON_LOG("Failed to enter PGM mode\r\n");
         spi_disable();
 	}
 
@@ -114,7 +114,7 @@ _i16 programmer_write_cmd(AvrCommand *cmd, AvrCommand *answer) {
 _i16 programmer_write_raw_cmd(_u8 *cmd, _u8 *answer) {
     _i16 status;
     _u8 temp_answer[AVR_CMD_SIZE];
-    MAP_SPITransfer(PROG_SPI_BASE, cmd, temp_answer, AVR_CMD_SIZE, 0);
+    MAP_SPITransfer(PROG_SPI_BASE, cmd, temp_answer, AVR_CMD_SIZE, SPI_CS_ENABLE | SPI_CS_DISABLE);
 
     status = check_cmd_status(cmd, temp_answer);
 
