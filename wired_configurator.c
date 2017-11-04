@@ -150,7 +150,7 @@ static void uart_irq_hdnl(void) {
 
         if(status < 0) {
             OSI_ERROR_LOG(status);
-            return;
+            goto irq_exit;
         }
 
         UART_PRINT("%d\r\n", cfg_packet.header.data_size);
@@ -173,7 +173,7 @@ static void uart_irq_hdnl(void) {
 
         if(status < 0) {
             OSI_ERROR_LOG(status);
-            return;
+            goto irq_exit;
         }
 
         /* Receive header again */
@@ -181,6 +181,7 @@ static void uart_irq_hdnl(void) {
         wired_recv(PL_PACKET_HEADER_SIZE, 0);
     }
 
+irq_exit:
     /* Clear interrupt */
     MAP_UARTIntClear(WIRED_UART, UART_INT_DMARX);
 }
