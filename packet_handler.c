@@ -218,6 +218,7 @@ static void vHandlingTask(void *pvParameters)
                         OSI_ASSERT_WITHOUT_EXIT(status);
 
                         if(packet->header.type == CloseConnectionPacket) {
+                            OSI_COMMON_LOG("Closing connection\r\n");
                             close_conn(info, packet);
                         }
                         else {
